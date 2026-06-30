@@ -1301,12 +1301,13 @@
                 const file = data.files[GIST_CONFIG.filename];
                 if (!file) return false;
                 const cloudData = JSON.parse(file.content);
-                // Cloud is source of truth: overwrite local data entirely
+                // Cloud is authoritative: completely replace local data
                 ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
-                    if (cloudData[key] === undefined) return;
-                    localStorage.setItem(key, JSON.stringify(cloudData[key]));
+                    if (cloudData[key] !== undefined) {
+                        localStorage.setItem(key, JSON.stringify(cloudData[key]));
+                    }
                 });
-                console.log('[CloudSync] Pulled data from cloud');
+                console.log('[CloudSync] Pulled data from cloud (cloud authoritative)');
                 return true;
             } catch(e) { console.warn('[CloudSync] Pull failed:', e); return false; }
         }
@@ -1315,6 +1316,7 @@
             const token = getSyncToken();
             if (!token) return false;
             try {
+                // Push local data directly to cloud
                 const payload = {};
                 ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
                     var val = localStorage.getItem(key);
@@ -1337,7 +1339,7 @@
                     }
                     return false;
                 }
-                console.log('[CloudSync] Pushed data to cloud');
+                console.log('[CloudSync] Pushed local data to cloud');
                 return true;
             } catch(e) { console.warn('[CloudSync] Push failed:', e); return false; }
         }
@@ -2353,10 +2355,4 @@
             initAuthUI(); initApplyPage(); initUserManageUI(); initCloudSyncUI();
             if (currentUser) { showApp(); }
             updateBadges();
-            // Start background auto-sync (every 30s)
-            startAutoSync();
-        }
-        init();
-    </script>
-</body>
-</html>
+            // Start background auto-syn
