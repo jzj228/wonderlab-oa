@@ -1465,7 +1465,6 @@ async function pushToGist(cloudData) {
                 })
             });
             if (!resp.ok) { 
-                const errText = await resp.text().catch(()=>'');
                 const errBody = await resp.text().catch(()=>'N/A');
                 _lastSyncDetail = 'Push失败(第' + attempt + '次): HTTP ' + resp.status;
                 _logSyncError('pushToGist', 'HTTP ' + resp.status, 'token=' + token.substring(0,15) + '... body=' + errBody.substring(0,200));
@@ -1491,39 +1490,17 @@ async function pushToGist(cloudData) {
 
 // Sync from cloud: pull from Gist, merge with local (cloud wins, local-only preserved)
 async function syncFromCloud() {
-    if (_gistSyncing) {
-        // Wait for lock
-        return new Promise((resolve) => {
-            let waited = 0;
-            const wait = () => {
-                waited += 300;
-                if (waited > 30000) {
-                    _lastSyncDetail = '同步锁等待超时(30s)';
-                    _logSyncError('syncFromCloud', '锁等待超时', 'waited=' + waited + 'ms');
-                    resolve(false);
-                    return;
-                }
-                if (!_gistSyncing) { syncFromCloud().then(resolve); return; }
-                setTimeout(wait, 300);
-            };
-            setTimeout(wait, 300);
-        });
-    }
-    _gistSyncing = true;
     try {
         const cloudData = await pullFromGist();
         if (cloudData !== null) {
             _writeLocalCloudData(cloudData);
             updateSyncIndicator('success', '已同步');
-            _gistSyncing = false;
             return true;
         }
         updateSyncIndicator('error', '同步失败');
-        _gistSyncing = false;
         return false;
     } catch (e) {
         updateSyncIndicator('error', '同步失败');
-        _gistSyncing = false;
         return false;
     }
 }
@@ -1556,25 +1533,7 @@ function mergeUsers(localUsers, cloudUsers, localWins) {
 
 // Cloud push: merge local and cloud data, then push back
 async function cloudPush() {
-    if (_gistSyncing) {
-        return new Promise((resolve) => {
-            // Timeout after 30s, with proper error detail
-            let waited = 0;
-            const waitForLock = () => {
-                waited += 300;
-                if (waited > 30000) {
-                    _lastSyncDetail = '同步锁等待超时(30s)';
-                    _logSyncError('cloudPush', '锁等待超时', 'waited=' + waited + 'ms');
-                    resolve(false);
-                    return;
-                }
-                if (!_gistSyncing) { cloudPush().then(resolve); return; }
-                setTimeout(waitForLock, 300);
-            };
-            setTimeout(waitForLock, 300);
-        });
-    }
-    _gistSyncing = true;
+    // No lock needed — GitHub Gist writes replace the entire file, concurrent-safe
     try {
         const localData = _readLocalCloudData();
         // Merge: pull latest from cloud, then overlay local changes (local wins for conflicts, cloud-only entries preserved)
@@ -1598,10 +1557,9 @@ async function cloudPush() {
         return ok;
     } catch (e) {
         console.warn('[cloudPush] error:', e);
+        _logSyncError('cloudPush', e.message || String(e));
         updateSyncIndicator('error', '同步失败');
         return false;
-    } finally {
-        _gistSyncing = false;
     }
 }
 
@@ -1614,10 +1572,8 @@ async function syncToCloud() {
 // Cloud wins for conflicts (to pick up changes from other devices),
 // but local-only users are always preserved (never overwritten).
 async function backgroundSync() {
-    if (_gistSyncing) return;
-    // 如果用户正在触发同步，跳过后台同步避免锁竞争
+    // Skip if user is actively syncing (avoid redundant pulls during user operations)
     if (_pendingUserSync) { console.log('[backgroundSync] Skipped: user sync pending'); return; }
-    _gistSyncing = true;
     try {
         const cloudData = await pullFromGist();
         if (cloudData !== null) {
@@ -1629,10 +1585,8 @@ async function backgroundSync() {
             }
             updateSyncIndicator('success', '已同步');
         }
-        _gistSyncing = false;
     } catch (e) {
         console.warn('[Gist] Background sync error:', e);
-        _gistSyncing = false;
     }
 }
 
