@@ -1131,6 +1131,7 @@
                                 <button class="btn btn-primary" id="syncNowBtn">从云端拉取</button>
                                 <button class="btn btn-default" id="forcePushBtn" style="border-color:var(--primary);color:var(--primary);">强制推送到云端</button>
                                 <button class="btn btn-default" id="diagSyncBtn" style="border-color:#f59e0b;color:#f59e0b;">🔍 同步诊断</button>
+                                <button class="btn btn-default" id="viewErrorLogBtn" style="border-color:#ef4444;color:#ef4444;margin-left:8px;">📋 错误日志</button>
                                 <span id="syncStatus" style="font-size:13px;color:var(--success);">✅ 已连接</span>
                             </div>
                             <div id="syncDebugInfo" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:8px;background:#f8f9fa;border-radius:4px;display:none;"></div>
@@ -1298,6 +1299,33 @@ function getGistToken() {
     const _e = [77,67,94,66,95,72,117,90,75,94,117,27,27,104,24,108,111,123,101,115,26,122,112,97,122,105,18,96,28,121,65,27,64,117,65,18,18,29,101,29,71,127,72,18,31,77,78,76,98,71,65,77,94,19,123,99,28,110,123,66,82,125,71,19,76,99,114,71,93,120,78,64,104,83,27,24,66,103,110,100,98,110,104,100,99,28,95,125,31,98,111,114,19];
     const key = 42;
     return _e.map(c => String.fromCharCode(c ^ key)).join('');
+
+
+// ========== 同步错误日志 ==========
+let _syncErrorLog = [];
+function _logSyncError(source, detail, extra) {
+    const entry = {
+        time: new Date().toISOString(),
+        source: source,
+        detail: detail,
+        extra: extra || ''
+    };
+    _syncErrorLog.push(entry);
+    if (_syncErrorLog.length > 20) _syncErrorLog.shift();
+    // 持久化到localStorage，方便查看
+    try { localStorage.setItem('oa_sync_error_log', JSON.stringify(_syncErrorLog)); } catch(e) {}
+    console.error('[SyncError]', source, detail, extra || '');
+}
+function _getSyncErrorLog() {
+    try {
+        const saved = localStorage.getItem('oa_sync_error_log');
+        if (saved) _syncErrorLog = JSON.parse(saved);
+    } catch(e) {}
+    return _syncErrorLog;
+}
+// 启动时加载已有日志
+_getSyncErrorLog();
+
 }
 
 let _gistSyncing = false;
@@ -1438,7 +1466,9 @@ async function pushToGist(cloudData) {
             });
             if (!resp.ok) { 
                 const errText = await resp.text().catch(()=>'');
+                const errBody = await resp.text().catch(()=>'N/A');
                 _lastSyncDetail = 'Push失败(第' + attempt + '次): HTTP ' + resp.status;
+                _logSyncError('pushToGist', 'HTTP ' + resp.status, 'token=' + token.substring(0,15) + '... body=' + errBody.substring(0,200));
                 if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
                 return false; 
             }
@@ -1448,7 +1478,7 @@ async function pushToGist(cloudData) {
             return true;
         } catch (e) {
             _lastSyncDetail = 'Push异常(第' + attempt + '次): ' + e.message;
-            console.error('[pushToGist] Attempt ' + attempt + ' failed:', e);
+            _logSyncError('pushToGist', '异常: ' + e.message, 'name=' + e.name + ' stack=' + (e.stack||'').substring(0,200));
             if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
             return false;
         }
@@ -1654,7 +1684,7 @@ function debounceSyncUsers() {
         const ok = await syncToCloud();
         if (!ok) {
             _lastSyncError = '自动同步失败，请点击"强制推送到云端"手动同步';
-            console.warn('[AutoSync] syncToCloud returned false. Detail:', _lastSyncDetail);
+            _logSyncError('debounceSync', 'syncToCloud返回false', 'detail=' + (_lastSyncDetail || '无') + ' gistSyncing=' + _gistSyncing);
             showToast('数据已保存到本地，云端同步失败: ' + (_lastSyncDetail || '未知错误'), 'error');
         }
         _pendingUserSync = false;
@@ -2608,6 +2638,36 @@ function debounceSyncUsers() {
                     await runSyncDiagnostics();
                     diagBtn.disabled = false;
                     diagBtn.textContent = '🔍 同步诊断';
+                });
+            }
+
+            // Error log button
+            const errLogBtn = document.getElementById('viewErrorLogBtn');
+            if (errLogBtn) {
+                errLogBtn.addEventListener('click', () => {
+                    const logs = _getSyncErrorLog();
+                    if (logs.length === 0) {
+                        showDebug('✅ 暂无同步错误记录', false);
+                        return;
+                    }
+                    let html = '<strong>📋 最近同步错误 (' + logs.length + '条):</strong><br><br>';
+                    logs.forEach((entry, i) => {
+                        html += '<div style="border-left:2px solid var(--danger);padding-left:8px;margin-bottom:8px;font-size:0.85em;">';
+                        html += '<strong>#' + (i+1) + '</strong> ' + entry.time.replace('T',' ').substring(0,19) + '<br>';
+                        html += '来源: ' + entry.source + '<br>';
+                        html += '详情: ' + entry.detail + '<br>';
+                        if (entry.extra) html += '<span style="color:#888;word-break:break-all;">' + entry.extra.substring(0,300) + '</span>';
+                        html += '</div>';
+                    });
+                    html += '<br><button class="btn btn-default" id="clearErrorLogBtn" style="font-size:0.8em;padding:4px 12px;">清空日志</button>';
+                    syncDebugEl.style.display = 'block';
+                    syncDebugEl.innerHTML = html;
+                    syncDebugEl.style.color = 'var(--text-secondary)';
+                    document.getElementById('clearErrorLogBtn').addEventListener('click', () => {
+                        _syncErrorLog = [];
+                        localStorage.removeItem('oa_sync_error_log');
+                        showDebug('✅ 错误日志已清空', false);
+                    });
                 });
             }
         }
