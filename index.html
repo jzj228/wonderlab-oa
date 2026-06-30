@@ -804,6 +804,7 @@
                 <div class="nav-item admin-nav hidden" data-page="personnel"><span class="nav-icon">👥</span><span>人员总览</span></div>
                 <div class="nav-item admin-nav hidden" data-page="dashboard"><span class="nav-icon">📊</span><span>数据看板</span></div>
                 <div class="nav-item admin-nav hidden" data-page="user-manage"><span class="nav-icon">⚙️</span><span>用户管理</span></div>
+                <div class="nav-item admin-nav hidden" data-page="cloud-sync"><span class="nav-icon">☁️</span><span>云同步</span></div>
             </nav>
             <div class="sidebar-footer">
                 <div class="user-info">
@@ -1111,6 +1112,54 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Cloud Sync Page -->
+            <div class="page" id="page-cloud-sync">
+                <div class="page-header"><h1 class="page-title">☁️ 云同步设置</h1><p class="page-desc">配置多设备数据同步，所有设备共享同一份数据</p></div>
+                <div class="page-body">
+                    <div style="max-width:600px;">
+                        <div style="background:var(--white);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:20px;">
+                            <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">🔑 GitHub Token 配置</h3>
+                            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;line-height:1.6;">
+                                系统使用 GitHub Gist 作为共享数据库。配置 Token 后，所有设备的数据将自动同步。<br>
+                                <strong>如何获取 Token：</strong>前往 <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--primary);">GitHub → Settings → Developer settings → Personal access tokens</a><br>
+                                创建新 Token，权限只需勾选 <strong>Gists: Read and write</strong>
+                            </p>
+                            <div class="form-group">
+                                <label class="form-label">GitHub Personal Access Token</label>
+                                <input type="password" class="form-input" id="syncTokenInput" placeholder="github_pat_xxxx..." style="font-family:monospace;">
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:center;">
+                                <button class="btn btn-primary" id="saveSyncTokenBtn">保存 Token</button>
+                                <button class="btn btn-default" id="clearSyncTokenBtn">清除 Token</button>
+                                <span id="syncTokenStatus" style="font-size:12px;color:var(--gray);"></span>
+                            </div>
+                        </div>
+
+                        <div style="background:var(--white);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:20px;">
+                            <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">🔄 数据同步</h3>
+                            <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
+                                <button class="btn btn-primary" id="syncNowBtn">立即同步</button>
+                                <span id="syncStatus" style="font-size:13px;color:var(--text-secondary);">未同步</span>
+                            </div>
+                            <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+                                <div id="syncLastTime">上次同步：从未</div>
+                                <div id="syncDataInfo">数据量：加载中...</div>
+                            </div>
+                        </div>
+
+                        <div style="background:var(--warning-bg);border-radius:var(--radius);padding:16px;border-left:4px solid var(--warning);">
+                            <p style="font-size:13px;color:#614700;line-height:1.6;">
+                                <strong>⚠️ 使用说明：</strong><br>
+                                1. 只需在<strong>一台设备</strong>上配置 Token，数据即会自动同步到云端<br>
+                                2. 其他设备打开页面时会自动拉取云端数据<br>
+                                3. Token 仅存储在当前浏览器中，不会上传到服务器<br>
+                                4. 数据修改后 1.5 秒自动同步到云端
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -1208,13 +1257,105 @@
             observer.observe(gate, { attributes: true, attributeFilter: ['class'] });
         })();
 
+        // ========== Cloud Sync (GitHub Gist) ==========
+        const GIST_CONFIG = {
+            id: '39f757ff5cbaad763b53de029a508235',
+            filename: 'oa-data.json',
+            tokenKey: 'oa_sync_token'
+        };
+        let _syncTimer = null;
+        let _syncing = false;
+
+        function getSyncToken() { return localStorage.getItem(GIST_CONFIG.tokenKey) || ''; }
+
+        async function syncFromCloud() {
+            const token = getSyncToken();
+            if (!token) return false;
+            try {
+                const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.id, {
+                    headers: { 'Authorization': 'token ' + token }
+                });
+                if (!resp.ok) {
+                    if (resp.status === 401 || resp.status === 403) {
+                        localStorage.removeItem(GIST_CONFIG.tokenKey);
+                        showToast('同步Token已失效，请在管理设置中重新配置', 'error');
+                    }
+                    return false;
+                }
+                const data = await resp.json();
+                const file = data.files[GIST_CONFIG.filename];
+                if (!file) return false;
+                const cloudData = JSON.parse(file.content);
+                // Merge cloud data into localStorage (cloud wins)
+                ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
+                    if (cloudData[key] !== undefined) localStorage.setItem(key, JSON.stringify(cloudData[key]));
+                });
+                console.log('[CloudSync] Pulled data from cloud');
+                return true;
+            } catch(e) { console.warn('[CloudSync] Pull failed:', e); return false; }
+        }
+
+        async function syncToCloudNow() {
+            const token = getSyncToken();
+            if (!token) return false;
+            try {
+                const payload = {};
+                ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
+                    var val = localStorage.getItem(key);
+                    if (val !== null) payload[key] = JSON.parse(val);
+                });
+                const files = {};
+                files[GIST_CONFIG.filename] = { content: JSON.stringify(payload, null, 2) };
+                const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.id, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': 'token ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ files: files })
+                });
+                if (!resp.ok) {
+                    if (resp.status === 401 || resp.status === 403) {
+                        localStorage.removeItem(GIST_CONFIG.tokenKey);
+                        showToast('同步Token已失效，请在管理设置中重新配置', 'error');
+                    }
+                    return false;
+                }
+                console.log('[CloudSync] Pushed data to cloud');
+                return true;
+            } catch(e) { console.warn('[CloudSync] Push failed:', e); return false; }
+        }
+
+        function syncToCloudDebounced() {
+            if (!getSyncToken()) return;
+            clearTimeout(_syncTimer);
+            _syncTimer = setTimeout(function() {
+                if (_syncing) { setTimeout(function() { syncToCloudDebounced(); }, 1000); return; }
+                _syncing = true;
+                syncToCloudNow().finally(function() { _syncing = false; });
+            }, 1500);
+        }
+
+        async function manualSync() {
+            const token = getSyncToken();
+            if (!token) { showToast('未配置同步Token，请先在管理设置中配置', 'error'); return false; }
+            showLoading();
+            try {
+                await syncFromCloud();
+                await syncToCloudNow();
+                hideLoading();
+                showToast('云同步完成 ✓', 'success');
+                return true;
+            } catch(e) { hideLoading(); showToast('同步失败: ' + e.message, 'error'); return false; }
+        }
+
         // ========== Storage Keys ==========
         const KEYS = { users: 'oa_users', currentUser: 'oa_current_user', notifications: 'oa_notifications', personnel: 'oa_personnel', applications: 'oa_applications' };
 
         // ========== Utilities ==========
         function uuid() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0, v=c==='x'?r:(r&0x3|0x8); return v.toString(16); }); }
         function genOrderNo() { const d=new Date(); return `OA${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(Math.floor(Math.random()*9999)+1).padStart(4,'0')}`; }
-        function save(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+        function save(k, v) { localStorage.setItem(k, JSON.stringify(v)); syncToCloudDebounced(); }
         function load(k) { const d=localStorage.getItem(k); return d?JSON.parse(d):null; }
         function showToast(msg, type='info') {
             const c=document.getElementById('toastContainer'), t=document.createElement('div');
@@ -1938,7 +2079,7 @@
             document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.page === page));
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.getElementById(`page-${page}`).classList.add('active');
-            const titles = { apply:'申请提交', 'my-apply':'我的申请', approval:'审批中心', personnel:'人员总览', dashboard:'数据看板', 'user-manage':'用户管理' };
+            const titles = { apply:'申请提交', 'my-apply':'我的申请', approval:'审批中心', personnel:'人员总览', dashboard:'数据看板', 'user-manage':'用户管理', 'cloud-sync':'云同步' };
             document.getElementById('currentPageTitle').textContent = titles[page] || '';
             document.getElementById('sidebar').classList.remove('open');
             if (page === 'my-apply') renderMyApply();
@@ -1946,6 +2087,7 @@
             else if (page === 'personnel') renderPersonnel();
             else if (page === 'dashboard') renderDashboard();
             else if (page === 'user-manage') renderUserManage();
+            else if (page === 'cloud-sync') renderCloudSync();
         }
 
         document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => navigateTo(item.dataset.page)));
@@ -2009,9 +2151,110 @@
         }
 
         // ========== Init ==========
-        function init() {
+        function initCloudSyncUI() {
+            const tokenInput = document.getElementById('syncTokenInput');
+            const saveBtn = document.getElementById('saveSyncTokenBtn');
+            const clearBtn = document.getElementById('clearSyncTokenBtn');
+            const syncNowBtn = document.getElementById('syncNowBtn');
+            const statusEl = document.getElementById('syncTokenStatus');
+            const syncStatusEl = document.getElementById('syncStatus');
+
+            // Show current token status
+            const existingToken = getSyncToken();
+            if (existingToken) {
+                tokenInput.value = existingToken;
+                statusEl.textContent = '✅ 已配置';
+                statusEl.style.color = 'var(--success)';
+            }
+
+            saveBtn.addEventListener('click', async () => {
+                const token = tokenInput.value.trim();
+                if (!token) { showToast('请输入 Token', 'error'); return; }
+                localStorage.setItem(GIST_CONFIG.tokenKey, token);
+                statusEl.textContent = '✅ 已保存';
+                statusEl.style.color = 'var(--success)';
+                showToast('Token 已保存，正在同步...', 'success');
+                const ok = await manualSync();
+                if (ok) {
+                    syncStatusEl.textContent = '已同步';
+                    syncStatusEl.style.color = 'var(--success)';
+                    // Reload data from localStorage after sync
+                    currentUser = load(KEYS.currentUser);
+                    initUsers();
+                    initSampleData();
+                    updateBadges();
+                    renderUserManage();
+                }
+            });
+
+            clearBtn.addEventListener('click', () => {
+                localStorage.removeItem(GIST_CONFIG.tokenKey);
+                tokenInput.value = '';
+                statusEl.textContent = '未配置';
+                statusEl.style.color = 'var(--gray)';
+                syncStatusEl.textContent = '未同步';
+                showToast('Token 已清除', 'info');
+            });
+
+            syncNowBtn.addEventListener('click', async () => {
+                syncStatusEl.textContent = '同步中...';
+                syncStatusEl.style.color = 'var(--warning)';
+                const ok = await manualSync();
+                if (ok) {
+                    syncStatusEl.textContent = '已同步';
+                    syncStatusEl.style.color = 'var(--success)';
+                    // Reload current view
+                    initUsers();
+                    if (currentUser) currentUser = load(KEYS.currentUser);
+                    if (currentPage === 'user-manage') renderUserManage();
+                    else if (currentPage === 'my-apply') renderMyApply();
+                    else if (currentPage === 'approval') renderApproval();
+                    else if (currentPage === 'personnel') renderPersonnel();
+                    updateBadges();
+                } else {
+                    syncStatusEl.textContent = '同步失败';
+                    syncStatusEl.style.color = 'var(--danger)';
+                }
+            });
+        }
+
+        function renderCloudSync() {
+            const token = getSyncToken();
+            const statusEl = document.getElementById('syncStatus');
+            const lastTimeEl = document.getElementById('syncLastTime');
+            const dataInfoEl = document.getElementById('syncDataInfo');
+
+            const lastSync = localStorage.getItem('oa_last_sync');
+            lastTimeEl.textContent = lastSync ? '上次同步：' + new Date(parseInt(lastSync)).toLocaleString('zh-CN') : '上次同步：从未';
+
+            const users = getUsers();
+            const apps = getApplications();
+            const personnel = getPersonnel();
+            dataInfoEl.textContent = `数据量：用户 ${users.length} 人，工单 ${apps.length} 条，人员 ${personnel.length} 人`;
+
+            if (token) {
+                statusEl.textContent = '已连接';
+                statusEl.style.color = 'var(--success)';
+            } else {
+                statusEl.textContent = '未配置 Token';
+                statusEl.style.color = 'var(--danger)';
+            }
+        }
+
+        async function init() {
+            // Try to sync from cloud first
+            const token = getSyncToken();
+            if (token) {
+                try {
+                    await syncFromCloud();
+                    localStorage.setItem('oa_last_sync', Date.now().toString());
+                    console.log('[Init] Cloud sync completed');
+                } catch(e) {
+                    console.warn('[Init] Cloud sync failed, using local data', e);
+                }
+            }
             initUsers(); initSampleData();
-            initAuthUI(); initApplyPage(); initUserManageUI();
+            initAuthUI(); initApplyPage(); initUserManageUI(); initCloudSyncUI();
             if (currentUser) { showApp(); }
             updateBadges();
         }
