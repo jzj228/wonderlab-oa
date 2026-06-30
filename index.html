@@ -738,9 +738,9 @@
                     
                     <div class="demo-account">
                         <strong>演示账号：</strong><br>
-                        管理员：admin / 123456<br>
-                        审批人：approver / 123456<br>
-                        普通用户：user / 123456
+                        管理员：18520170312 / 123456<br>
+                        审批人：13800000002 / 123456<br>
+                        普通用户：13800000003 / 123456
                     </div>
                 </div>
 
@@ -1282,13 +1282,22 @@
         let currentUser = load(KEYS.currentUser);
 
         function initUsers() {
-            if (load(KEYS.users)) return;
-            const users = [
-                { id: 'admin', name: '管理员', phone: '13800000001', email: 'admin@wonderlab.com', password: '123456', role: 'admin', feishu: { bound: true, name: '管理员', avatar: null }, createdAt: Date.now() },
-                { id: 'approver', name: '审批人', phone: '13800000002', email: 'approver@wonderlab.com', password: '123456', role: 'approver', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() },
-                { id: 'user', name: '普通用户', phone: '13800000003', email: 'user@wonderlab.com', password: '123456', role: 'user', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() }
-            ];
-            save(KEYS.users, users);
+            let users = load(KEYS.users) || [];
+            // Ensure admin account with real phone exists
+            const adminPhone = '18520170312';
+            if (!users.find(u => u.phone === adminPhone)) {
+                users.unshift({ id: 'admin', name: '江子俊', phone: adminPhone, email: 'admin@wonderlab.com', password: '123456', role: 'admin', feishu: { bound: true, name: '江子俊', avatar: null }, createdAt: Date.now() });
+                save(KEYS.users, users);
+            }
+            // Init demo users if empty
+            if (users.length <= 1) {
+                const demos = [
+                    { id: 'approver', name: '审批人', phone: '13800000002', email: 'approver@wonderlab.com', password: '123456', role: 'approver', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() },
+                    { id: 'user', name: '普通用户', phone: '13800000003', email: 'user@wonderlab.com', password: '123456', role: 'user', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() }
+                ];
+                users.push(...demos);
+                save(KEYS.users, users);
+            }
         }
 
         function getUsers() { return load(KEYS.users) || []; }
