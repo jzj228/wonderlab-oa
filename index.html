@@ -1497,7 +1497,13 @@ async function syncFromCloud() {
             let waited = 0;
             const wait = () => {
                 waited += 300;
-                if (waited > 15000 || !_gistSyncing) { syncFromCloud().then(resolve); return; }
+                if (waited > 30000) {
+                    _lastSyncDetail = '同步锁等待超时(30s)';
+                    _logSyncError('syncFromCloud', '锁等待超时', 'waited=' + waited + 'ms');
+                    resolve(false);
+                    return;
+                }
+                if (!_gistSyncing) { syncFromCloud().then(resolve); return; }
                 setTimeout(wait, 300);
             };
             setTimeout(wait, 300);
@@ -1552,11 +1558,16 @@ function mergeUsers(localUsers, cloudUsers, localWins) {
 async function cloudPush() {
     if (_gistSyncing) {
         return new Promise((resolve) => {
-            // Timeout after 15s
+            // Timeout after 30s, with proper error detail
             let waited = 0;
             const waitForLock = () => {
                 waited += 300;
-                if (waited > 15000) { resolve(false); return; }
+                if (waited > 30000) {
+                    _lastSyncDetail = '同步锁等待超时(30s)';
+                    _logSyncError('cloudPush', '锁等待超时', 'waited=' + waited + 'ms');
+                    resolve(false);
+                    return;
+                }
                 if (!_gistSyncing) { cloudPush().then(resolve); return; }
                 setTimeout(waitForLock, 300);
             };
@@ -1604,6 +1615,8 @@ async function syncToCloud() {
 // but local-only users are always preserved (never overwritten).
 async function backgroundSync() {
     if (_gistSyncing) return;
+    // 如果用户正在触发同步，跳过后台同步避免锁竞争
+    if (_pendingUserSync) { console.log('[backgroundSync] Skipped: user sync pending'); return; }
     _gistSyncing = true;
     try {
         const cloudData = await pullFromGist();
