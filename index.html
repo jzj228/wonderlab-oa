@@ -1303,11 +1303,86 @@ function getGistToken() {
 let _gistSyncing = false;
 let _lastSyncTime = 0;
 let _lastSyncDetail = ''; // 详细同步状态（用于诊断）
+let _syncQueue = []; // 同步请求排队队列（解决锁冲突问题）
+let _syncQueueProcessing = false; // 队列处理中
 
-// Pull latest data from Gist (with retry)
+// ========== 云端优先存储核心函数 ==========
+// 读取本地缓存
+function _readLocalCloudData() {
+    const cached = localStorage.getItem('oa_cloud_data');
+    if (cached) {
+        try { return JSON.parse(cached); } catch(e) {}
+    }
+    return { oa_users: JSON.parse(localStorage.getItem('oa_users') || '[]'), oa_personnel: JSON.parse(localStorage.getItem('oa_personnel') || '[]'), oa_applications: JSON.parse(localStorage.getItem('oa_applications') || '[]') };
+}
+
+// 写入本地缓存
+function _writeLocalCloudData(data) {
+    localStorage.setItem('oa_cloud_data', JSON.stringify(data));
+    // 同步更新旧的 localStorage keys，确保兼容性
+    localStorage.setItem('oa_users', JSON.stringify(data.oa_users || []));
+    localStorage.setItem('oa_personnel', JSON.stringify(data.oa_personnel || []));
+    localStorage.setItem('oa_applications', JSON.stringify(data.oa_applications || []));
+}
+
+// Merge arrays by id field (union, local wins for conflicts)
+function mergeArrayById(localArr, cloudArr) {
+    const map = new Map();
+    (cloudArr || []).forEach(item => map.set(item.id, {...item}));
+    (localArr || []).forEach(item => map.set(item.id, {...item})); // local overrides cloud
+    return Array.from(map.values());
+}
+
+// ========== 原有的 Mutex-based sync ==========
+
+// Mutex-based sync: if a sync is in progress, queue and wait; never fail due to lock
+async function runSync(fn, name) {
+    return new Promise((resolve) => {
+        const execute = async () => {
+            try {
+                const result = await fn();
+                resolve(result);
+            } catch(e) {
+                console.warn('[SyncQueue] ' + name + ' error:', e);
+                resolve(false);
+            }
+        };
+        if (!_gistSyncing && !_syncQueueProcessing) {
+            // No lock, execute immediately
+            execute();
+        } else {
+            // Lock held, queue it
+            console.log('[SyncQueue] ' + name + ' queued (lock held by another sync)');
+            _syncQueue.push(execute);
+            // Start processing if not already
+            if (!_syncQueueProcessing) {
+                _syncQueueProcessing = true;
+                processSyncQueue();
+            }
+            // Also resolve when our turn comes
+            const originalExecute = execute;
+            _syncQueue[_syncQueue.length - 1] = async () => {
+                await originalExecute();
+            };
+        }
+    });
+}
+
+async function processSyncQueue() {
+    while (_syncQueue.length > 0) {
+        // Wait for lock to be released
+        while (_gistSyncing) {
+            await new Promise(r => setTimeout(r, 500));
+        }
+        const next = _syncQueue.shift();
+        if (next) await next();
+    }
+    _syncQueueProcessing = false;
+}
+
+// Pull latest data from Gist (with retry) - returns full data object
 async function pullFromGist() {
     const token = getGistToken();
-    _lastSyncDetail = 'Token解码: OK (' + token.substring(0,8) + '...)';
     for (let attempt = 1; attempt <= 2; attempt++) {
         try {
             const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
@@ -1315,8 +1390,7 @@ async function pullFromGist() {
             });
             if (!resp.ok) { 
                 const errText = await resp.text().catch(()=>'');
-                _lastSyncDetail = 'Pull失败(第' + attempt + '次): HTTP ' + resp.status + ' ' + resp.statusText + (errText ? ' | ' + errText.substring(0,200) : '');
-                console.warn('[Gist] Pull failed attempt', attempt, ':', resp.status, errText);
+                _lastSyncDetail = 'Pull失败(第' + attempt + '次): HTTP ' + resp.status;
                 if (attempt < 2) { await new Promise(r => setTimeout(r, 1500)); continue; }
                 return null; 
             }
@@ -1324,14 +1398,18 @@ async function pullFromGist() {
             const file = data.files[GIST_CONFIG.fileName];
             if (!file) { _lastSyncDetail = 'Pull失败: 文件中未找到oa-data.json'; return null; }
             const parsed = JSON.parse(file.content);
-            const users = parsed.oa_users || [];
+            // 兼容旧格式（可能没有 oa_personnel 和 oa_applications）
+            const result = {
+                oa_users: parsed.oa_users || [],
+                oa_personnel: parsed.oa_personnel || [],
+                oa_applications: parsed.oa_applications || []
+            };
             _lastSyncTime = Date.now();
-            _lastSyncDetail = 'Pull成功: ' + users.length + '个用户';
-            console.log('[Gist] Pulled', users.length, 'users');
-            return users;
+            _lastSyncDetail = 'Pull成功: 用户' + result.oa_users.length + ' 人员' + result.oa_personnel.length + ' 申请' + result.oa_applications.length;
+            console.log('[Gist] Pulled all data');
+            return result;
         } catch (e) {
             _lastSyncDetail = 'Pull异常(第' + attempt + '次): ' + e.message;
-            console.warn('[Gist] Pull error attempt', attempt, ':', e);
             if (attempt < 2) { await new Promise(r => setTimeout(r, 1500)); continue; }
             return null;
         }
@@ -1339,13 +1417,14 @@ async function pullFromGist() {
     return null;
 }
 
-// Push data to Gist (with retry)
-async function pushToGist(users) {
+// Push data to Gist (with retry) - receives full data object
+async function pushToGist(cloudData) {
     const token = getGistToken();
-    const payload = JSON.stringify({ oa_users: users, version: Date.now() }, null, 2);
+    cloudData.version = Date.now();
+    const payload = JSON.stringify(cloudData, null, 2);
     for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-            _lastSyncDetail = (_lastSyncDetail ? _lastSyncDetail + ' → ' : '') + 'Push中(' + attempt + '/2): ' + users.length + '个用户';
+            _lastSyncDetail = 'Push中(' + attempt + '/2)';
             const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
                 method: 'PATCH',
                 headers: {
@@ -1359,18 +1438,16 @@ async function pushToGist(users) {
             });
             if (!resp.ok) { 
                 const errText = await resp.text().catch(()=>'');
-                _lastSyncDetail = 'Push失败(第' + attempt + '次): HTTP ' + resp.status + ' ' + resp.statusText + (errText ? ' | ' + errText.substring(0,300) : '');
-                console.warn('[Gist] Push failed attempt', attempt, ':', resp.status, errText);
+                _lastSyncDetail = 'Push失败(第' + attempt + '次): HTTP ' + resp.status;
                 if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
                 return false; 
             }
             _lastSyncTime = Date.now();
-            _lastSyncDetail = 'Push成功: ' + users.length + '个用户';
-            console.log('[Gist] Pushed', users.length, 'users');
+            _lastSyncDetail = 'Push成功';
+            console.log('[Gist] Pushed all data');
             return true;
         } catch (e) {
             _lastSyncDetail = 'Push异常(第' + attempt + '次): ' + e.message;
-            console.warn('[Gist] Push error attempt', attempt, ':', e);
             if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
             return false;
         }
@@ -1380,16 +1457,24 @@ async function pushToGist(users) {
 
 // Sync from cloud: pull from Gist, merge with local (cloud wins, local-only preserved)
 async function syncFromCloud() {
-    if (_gistSyncing) return false;
+    if (_gistSyncing) {
+        // Wait for lock
+        return new Promise((resolve) => {
+            let waited = 0;
+            const wait = () => {
+                waited += 300;
+                if (waited > 15000 || !_gistSyncing) { syncFromCloud().then(resolve); return; }
+                setTimeout(wait, 300);
+            };
+            setTimeout(wait, 300);
+        });
+    }
     _gistSyncing = true;
     try {
-        updateSyncIndicator('syncing', '同步中...');
-        const cloudUsers = await pullFromGist();
-        if (cloudUsers !== null) {
-            const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
-            const merged = mergeUsers(localUsers, cloudUsers, false);
-            localStorage.setItem('oa_users', JSON.stringify(merged));
-            updateSyncIndicator('success', '已同步 ' + merged.length + ' 人');
+        const cloudData = await pullFromGist();
+        if (cloudData !== null) {
+            _writeLocalCloudData(cloudData);
+            updateSyncIndicator('success', '已同步');
             _gistSyncing = false;
             return true;
         }
@@ -1397,7 +1482,6 @@ async function syncFromCloud() {
         _gistSyncing = false;
         return false;
     } catch (e) {
-        console.warn('[Gist] syncFromCloud error:', e);
         updateSyncIndicator('error', '同步失败');
         _gistSyncing = false;
         return false;
@@ -1430,36 +1514,53 @@ function mergeUsers(localUsers, cloudUsers, localWins) {
     return merged;
 }
 
-// Sync to cloud: pull latest → merge with local → push back
-async function syncToCloud() {
-    if (_gistSyncing) return false;
+// Cloud push: merge local and cloud data, then push back
+async function cloudPush() {
+    if (_gistSyncing) {
+        return new Promise((resolve) => {
+            // Timeout after 15s
+            let waited = 0;
+            const waitForLock = () => {
+                waited += 300;
+                if (waited > 15000) { resolve(false); return; }
+                if (!_gistSyncing) { cloudPush().then(resolve); return; }
+                setTimeout(waitForLock, 300);
+            };
+            setTimeout(waitForLock, 300);
+        });
+    }
     _gistSyncing = true;
     try {
-        // Step 1: Pull latest from cloud
-        const cloudUsers = await pullFromGist();
-        if (cloudUsers === null) { _gistSyncing = false; return false; }
-
-        // Step 2: Get local data
-        const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
-
-        // Step 3: Merge — local wins for conflicts, all users from both sides preserved
-        const merged = mergeUsers(localUsers, cloudUsers, true);
-
-        // Step 4: Push merged data
-        const ok = await pushToGist(merged);
-
-        // Step 5: Update localStorage
-        localStorage.setItem('oa_users', JSON.stringify(merged));
-
-        updateSyncIndicator('success', '已同步 ' + merged.length + ' 人');
-        _gistSyncing = false;
+        const localData = _readLocalCloudData();
+        // Merge: pull latest from cloud, then overlay local changes (local wins for conflicts, cloud-only entries preserved)
+        const cloudData = await pullFromGist();
+        if (cloudData !== null) {
+            // Merge each data type: union of both sides
+            localData.oa_users = mergeArrayById(localData.oa_users, cloudData.oa_users);
+            localData.oa_personnel = mergeArrayById(localData.oa_personnel, cloudData.oa_personnel);
+            localData.oa_applications = mergeArrayById(localData.oa_applications, cloudData.oa_applications);
+        }
+        const ok = await pushToGist(localData);
+        // Update local cache with merged data
+        _writeLocalCloudData(localData);
+        if (ok) {
+            updateSyncIndicator('success', '已同步');
+        } else {
+            updateSyncIndicator('error', '同步失败');
+        }
         return ok;
     } catch (e) {
-        console.warn('[Gist] syncToCloud error:', e);
+        console.warn('[cloudPush] error:', e);
         updateSyncIndicator('error', '同步失败');
-        _gistSyncing = false;
         return false;
+    } finally {
+        _gistSyncing = false;
     }
+}
+
+// Sync to cloud: pull latest → merge with local → push back
+async function syncToCloud() {
+    return await cloudPush();
 }
 
 // Background sync: pull cloud data and merge bidirectionally with local
@@ -1469,15 +1570,15 @@ async function backgroundSync() {
     if (_gistSyncing) return;
     _gistSyncing = true;
     try {
-        const cloudUsers = await pullFromGist();
-        if (cloudUsers === null) { _gistSyncing = false; return; }
-        const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
-        // Merge: cloud wins for conflicts, local-only users preserved
-        const merged = mergeUsers(localUsers, cloudUsers, false);
-        if (JSON.stringify(merged) !== JSON.stringify(localUsers)) {
-            localStorage.setItem('oa_users', JSON.stringify(merged));
-            updateSyncIndicator('success', '已同步 ' + merged.length + ' 人');
-            refreshCurrentView();
+        const cloudData = await pullFromGist();
+        if (cloudData !== null) {
+            // Check if anything changed
+            const localData = _readLocalCloudData();
+            if (JSON.stringify(cloudData) !== JSON.stringify(localData)) {
+                _writeLocalCloudData(cloudData);
+                refreshCurrentView();
+            }
+            updateSyncIndicator('success', '已同步');
         }
         _gistSyncing = false;
     } catch (e) {
@@ -1528,8 +1629,8 @@ async function manualSync() {
         function genOrderNo() { const d=new Date(); return `OA${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(Math.floor(Math.random()*9999)+1).padStart(4,'0')}`; }
         function save(k, v) { 
     localStorage.setItem(k, JSON.stringify(v)); 
-    // 用户表变更时同步到云端（异步，不阻塞）
-    if (k === 'oa_users') {
+    // 所有共享数据变更时同步到云端（异步，不阻塞）
+    if (k === 'oa_users' || k === 'oa_personnel' || k === 'oa_applications') {
         debounceSyncUsers();
     }
 }
@@ -1544,10 +1645,6 @@ function debounceSyncUsers() {
         if (_pendingUserSync) return;
         _pendingUserSync = true;
         _lastSyncError = null;
-        // Wait up to 10s if another sync is in progress
-        for (let wait = 0; wait < 5 && _gistSyncing; wait++) {
-            await new Promise(r => setTimeout(r, 2000));
-        }
         const ok = await syncToCloud();
         if (!ok) {
             _lastSyncError = '自动同步失败，请点击"强制推送到云端"手动同步';
@@ -2333,11 +2430,9 @@ function debounceSyncUsers() {
         // Force pull from cloud and render — bypasses _gistSyncing lock
         async function forcePullAndRender(targetPage) {
             try {
-                const cloudUsers = await pullFromGist();
-                if (cloudUsers !== null) {
-                    const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
-                    const merged = mergeUsers(localUsers, cloudUsers, false);
-                    localStorage.setItem('oa_users', JSON.stringify(merged));
+                const cloudData = await pullFromGist();
+                if (cloudData !== null) {
+                    _writeLocalCloudData(cloudData);
                 }
             } catch (e) {
                 console.warn('[Gist] forcePull error:', e);
@@ -2440,7 +2535,7 @@ function debounceSyncUsers() {
             syncNowBtn.addEventListener('click', async () => {
                 syncStatusEl.textContent = '拉取中...';
                 syncStatusEl.style.color = 'var(--warning)';
-                const ok = await manualSync();
+                const ok = await syncFromCloud();
                 if (ok) {
                     syncStatusEl.textContent = '已同步';
                     syncStatusEl.style.color = 'var(--success)';
@@ -2451,12 +2546,14 @@ function debounceSyncUsers() {
                     else if (currentPage === 'approval') renderApproval();
                     else if (currentPage === 'personnel') renderPersonnel();
                     updateBadges();
+                    refreshCurrentView();
                     const users = getUsers();
-                    showDebug(`✅ 拉取成功！本地现有 ${users.length} 个用户`, false);
+                    const apps = getApplications();
+                    showDebug(`✅ 拉取成功！本地现有 ${users.length} 个用户, ${apps.length} 条申请`, false);
                 } else {
                     syncStatusEl.textContent = '拉取失败';
                     syncStatusEl.style.color = 'var(--danger)';
-                    showDebug('❌ 拉取失败，请检查网络或 GitHub Token 是否有效', true);
+                    showDebug('❌ 拉取失败: ' + (_lastSyncDetail || '请检查网络'), true);
                 }
             });
 
@@ -2467,41 +2564,24 @@ function debounceSyncUsers() {
                 forcePushBtn.disabled = true;
 
                 try {
-                    const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
-                    showDebug(`本地用户数: ${localUsers.length}，正在推送到云端...`, false);
+                    // 直接用本地缓存数据推送到云端
+                    const localData = _readLocalCloudData();
+                    showDebug(`本地数据：用户${localData.oa_users.length} 人员${localData.oa_personnel.length} 申请${localData.oa_applications.length}，正在推送...`, false);
 
-                    // Step 1: Pull latest from cloud
-                    const cloudUsers = await pullFromGist();
-                    if (cloudUsers === null) {
-                        throw new Error('无法从云端拉取数据（网络问题或Token无效）');
-                    }
-                    showDebug(`本地 ${localUsers.length} 用户，云端 ${cloudUsers.length} 用户，正在合并...`, false);
-
-                    // Step 2: Merge
-                    const merged = mergeUsers(localUsers, cloudUsers, true);
-                    showDebug(`合并后 ${merged.length} 用户，正在写入云端...`, false);
-
-                    // Step 3: Push to cloud
-                    const ok = await pushToGist(merged);
+                    // Push to cloud
+                    const ok = await pushToGist(localData);
                     if (!ok) {
                         throw new Error('推送到云端失败');
                     }
 
-                    // Step 4: Update local
-                    localStorage.setItem('oa_users', JSON.stringify(merged));
+                    // Update sync time
                     localStorage.setItem('oa_last_sync', Date.now().toString());
 
                     syncStatusEl.textContent = '推送成功 ✓';
                     syncStatusEl.style.color = 'var(--success)';
-
-                    const localNames = localUsers.map(u => u.name).join(', ');
-                    const cloudNames = cloudUsers.map(u => u.name).join(', ');
-                    const mergedNames = merged.map(u => u.name).join(', ');
-                    showDebug(`✅ 推送成功！<br>推送前本地: [${localNames}]<br>推送前云端: [${cloudNames}]<br>推送后云端: [${mergedNames}]`, false);
+                    showDebug(`✅ 推送成功！所有数据已同步到云端`, false);
 
                     // Refresh views
-                    initUsers();
-                    if (currentPage === 'user-manage') renderUserManage();
                     updateBadges();
                 } catch (e) {
                     syncStatusEl.textContent = '推送失败';
@@ -2547,8 +2627,8 @@ function debounceSyncUsers() {
             
             // Step 2: Check localStorage data
             try {
-                const users = JSON.parse(localStorage.getItem('oa_users') || '[]');
-                results.push('✅ 本地数据: ' + users.length + '个用户 [' + users.map(u=>u.name).join(',') + ']');
+                const localData = _readLocalCloudData();
+                results.push('✅ 本地数据: 用户' + localData.oa_users.length + ' 人员' + localData.oa_personnel.length + ' 申请' + localData.oa_applications.length);
             } catch(e) {
                 results.push('❌ 本地数据读取失败: ' + e.message);
             }
@@ -2564,13 +2644,14 @@ function debounceSyncUsers() {
                     const file = data.files[GIST_CONFIG.fileName];
                     if (file) {
                         const parsed = JSON.parse(file.content);
-                        results.push('✅ 云端拉取成功: HTTP ' + resp.status + ', 云端有 ' + (parsed.oa_users||[]).length + '个用户');
+                        results.push('✅ 云端拉取成功: HTTP ' + resp.status);
+                        results.push('   云端数据: 用户' + (parsed.oa_users||[]).length + ' 人员' + (parsed.oa_personnel||[]).length + ' 申请' + (parsed.oa_applications||[]).length);
                     } else {
                         results.push('⚠️ 云端数据文件中未找到 oa-data.json');
                     }
                 } else {
                     const errText = await resp.text().catch(()=>'N/A');
-                    results.push('❌ 云端拉取失败: HTTP ' + resp.status + ' ' + resp.statusText + ' | ' + errText.substring(0,150));
+                    results.push('❌ 云端拉取失败: HTTP ' + resp.status + ' | ' + errText.substring(0,150));
                 }
             } catch(e) {
                 results.push('❌ 云端拉取异常: ' + e.message + ' (可能是网络问题或CORS被阻止)');
@@ -2602,7 +2683,7 @@ function debounceSyncUsers() {
                         results.push('✅ 云端推送成功: HTTP ' + patchResp.status + ' (写入测试通过)');
                     } else {
                         const errText = await patchResp.text().catch(()=>'N/A');
-                        results.push('❌ 云端推送失败: HTTP ' + patchResp.status + ' ' + patchResp.statusText + ' | ' + errText.substring(0,150));
+                        results.push('❌ 云端推送失败: HTTP ' + patchResp.status + ' | ' + errText.substring(0,150));
                     }
                 }
             } catch(e) {
@@ -2644,11 +2725,11 @@ function debounceSyncUsers() {
             const personnel = getPersonnel();
             dataInfoEl.textContent = `本地数据：用户 ${users.length} 人，工单 ${apps.length} 条，人员 ${personnel.length} 人`;
 
-            // Show current local user list for debugging
+            // Show current local data for debugging
             if (debugEl.style.display !== 'block' || !_lastSyncError) {
-                const userNames = users.map(u => u.name).join(', ');
+                const localData = _readLocalCloudData();
                 debugEl.style.display = 'block';
-                debugEl.innerHTML = `本地用户列表: [${userNames || '无'}]<br><small>提示：如其他设备注册了新用户，请点击"从云端拉取"；如本设备有新用户需推送，请点击"强制推送到云端"</small>`;
+                debugEl.innerHTML = `本地数据：用户${localData.oa_users.length} 人员${localData.oa_personnel.length} 申请${localData.oa_applications.length}<br><small>提示：如需同步云端数据，请点击"从云端拉取"或"强制推送到云端"</small>`;
                 debugEl.style.color = 'var(--text-secondary)';
             }
         }
