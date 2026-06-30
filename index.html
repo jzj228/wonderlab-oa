@@ -1130,6 +1130,7 @@
                             <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
                                 <button class="btn btn-primary" id="syncNowBtn">从云端拉取</button>
                                 <button class="btn btn-default" id="forcePushBtn" style="border-color:var(--primary);color:var(--primary);">强制推送到云端</button>
+                                <button class="btn btn-default" id="diagSyncBtn" style="border-color:#f59e0b;color:#f59e0b;">🔍 同步诊断</button>
                                 <span id="syncStatus" style="font-size:13px;color:var(--success);">✅ 已连接</span>
                             </div>
                             <div id="syncDebugInfo" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:8px;background:#f8f9fa;border-radius:4px;display:none;"></div>
@@ -1301,53 +1302,80 @@ function getGistToken() {
 
 let _gistSyncing = false;
 let _lastSyncTime = 0;
+let _lastSyncDetail = ''; // 详细同步状态（用于诊断）
 
-// Pull latest data from Gist
+// Pull latest data from Gist (with retry)
 async function pullFromGist() {
-    try {
-        const token = getGistToken();
-        const resp = await fetch(`https://api.github.com/gists/${GIST_CONFIG.gistId}`, {
-            headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-        });
-        if (!resp.ok) { console.warn('[Gist] Pull failed:', resp.status); return null; }
-        const data = await resp.json();
-        const file = data.files[GIST_CONFIG.fileName];
-        if (!file) { console.warn('[Gist] File not found in gist'); return null; }
-        const parsed = JSON.parse(file.content);
-        const users = parsed.oa_users || [];
-        _lastSyncTime = Date.now();
-        console.log('[Gist] Pulled', users.length, 'users');
-        return users;
-    } catch (e) {
-        console.warn('[Gist] Pull error:', e);
-        return null;
+    const token = getGistToken();
+    _lastSyncDetail = 'Token解码: OK (' + token.substring(0,8) + '...)';
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
+                headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+            });
+            if (!resp.ok) { 
+                const errText = await resp.text().catch(()=>'');
+                _lastSyncDetail = 'Pull失败(第' + attempt + '次): HTTP ' + resp.status + ' ' + resp.statusText + (errText ? ' | ' + errText.substring(0,200) : '');
+                console.warn('[Gist] Pull failed attempt', attempt, ':', resp.status, errText);
+                if (attempt < 2) { await new Promise(r => setTimeout(r, 1500)); continue; }
+                return null; 
+            }
+            const data = await resp.json();
+            const file = data.files[GIST_CONFIG.fileName];
+            if (!file) { _lastSyncDetail = 'Pull失败: 文件中未找到oa-data.json'; return null; }
+            const parsed = JSON.parse(file.content);
+            const users = parsed.oa_users || [];
+            _lastSyncTime = Date.now();
+            _lastSyncDetail = 'Pull成功: ' + users.length + '个用户';
+            console.log('[Gist] Pulled', users.length, 'users');
+            return users;
+        } catch (e) {
+            _lastSyncDetail = 'Pull异常(第' + attempt + '次): ' + e.message;
+            console.warn('[Gist] Pull error attempt', attempt, ':', e);
+            if (attempt < 2) { await new Promise(r => setTimeout(r, 1500)); continue; }
+            return null;
+        }
     }
+    return null;
 }
 
-// Push data to Gist
+// Push data to Gist (with retry)
 async function pushToGist(users) {
-    try {
-        const token = getGistToken();
-        const content = JSON.stringify({ oa_users: users, version: Date.now() }, null, 2);
-        const resp = await fetch(`https://api.github.com/gists/${GIST_CONFIG.gistId}`, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': 'token ' + token,
-                'Accept': 'application/vnd.github.v3+json',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                files: { [GIST_CONFIG.fileName]: { content } }
-            })
-        });
-        if (!resp.ok) { console.warn('[Gist] Push failed:', resp.status); return false; }
-        _lastSyncTime = Date.now();
-        console.log('[Gist] Pushed', users.length, 'users');
-        return true;
-    } catch (e) {
-        console.warn('[Gist] Push error:', e);
-        return false;
+    const token = getGistToken();
+    const payload = JSON.stringify({ oa_users: users, version: Date.now() }, null, 2);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            _lastSyncDetail = (_lastSyncDetail ? _lastSyncDetail + ' → ' : '') + 'Push中(' + attempt + '/2): ' + users.length + '个用户';
+            const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': 'token ' + token,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    files: { [GIST_CONFIG.fileName]: { content: payload } }
+                })
+            });
+            if (!resp.ok) { 
+                const errText = await resp.text().catch(()=>'');
+                _lastSyncDetail = 'Push失败(第' + attempt + '次): HTTP ' + resp.status + ' ' + resp.statusText + (errText ? ' | ' + errText.substring(0,300) : '');
+                console.warn('[Gist] Push failed attempt', attempt, ':', resp.status, errText);
+                if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
+                return false; 
+            }
+            _lastSyncTime = Date.now();
+            _lastSyncDetail = 'Push成功: ' + users.length + '个用户';
+            console.log('[Gist] Pushed', users.length, 'users');
+            return true;
+        } catch (e) {
+            _lastSyncDetail = 'Push异常(第' + attempt + '次): ' + e.message;
+            console.warn('[Gist] Push error attempt', attempt, ':', e);
+            if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
+            return false;
+        }
     }
+    return false;
 }
 
 // Sync from cloud: pull from Gist, merge with local (cloud wins, local-only preserved)
@@ -1516,11 +1544,15 @@ function debounceSyncUsers() {
         if (_pendingUserSync) return;
         _pendingUserSync = true;
         _lastSyncError = null;
+        // Wait up to 10s if another sync is in progress
+        for (let wait = 0; wait < 5 && _gistSyncing; wait++) {
+            await new Promise(r => setTimeout(r, 2000));
+        }
         const ok = await syncToCloud();
         if (!ok) {
             _lastSyncError = '自动同步失败，请点击"强制推送到云端"手动同步';
-            console.warn('[AutoSync] syncToCloud returned false, _gistSyncing was likely locked');
-            showToast('数据已保存到本地，云端同步失败。请到"数据同步"页面手动推送', 'error');
+            console.warn('[AutoSync] syncToCloud returned false. Detail:', _lastSyncDetail);
+            showToast('数据已保存到本地，云端同步失败: ' + (_lastSyncDetail || '未知错误'), 'error');
         }
         _pendingUserSync = false;
     }, 2000);
@@ -2480,6 +2512,111 @@ function debounceSyncUsers() {
                     forcePushBtn.disabled = false;
                 }
             });
+
+            // Diagnostic button
+            const diagBtn = document.getElementById('diagSyncBtn');
+            if (diagBtn) {
+                diagBtn.addEventListener('click', async () => {
+                    diagBtn.disabled = true;
+                    diagBtn.textContent = '⏳ 诊断中...';
+                    await runSyncDiagnostics();
+                    diagBtn.disabled = false;
+                    diagBtn.textContent = '🔍 同步诊断';
+                });
+            }
+        }
+
+        // Sync diagnostic test function
+        async function runSyncDiagnostics() {
+            const debugEl = document.getElementById('syncDebugInfo');
+            debugEl.style.display = 'block';
+            debugEl.style.color = 'var(--text-secondary)';
+            debugEl.innerHTML = '⏳ 正在诊断同步连接...';
+            
+            const results = [];
+            
+            // Step 1: Check token decoding
+            try {
+                const token = getGistToken();
+                results.push('✅ Token解码成功: ' + token.substring(0,10) + '...');
+            } catch(e) {
+                results.push('❌ Token解码失败: ' + e.message);
+                debugEl.innerHTML = results.join('<br>');
+                return;
+            }
+            
+            // Step 2: Check localStorage data
+            try {
+                const users = JSON.parse(localStorage.getItem('oa_users') || '[]');
+                results.push('✅ 本地数据: ' + users.length + '个用户 [' + users.map(u=>u.name).join(',') + ']');
+            } catch(e) {
+                results.push('❌ 本地数据读取失败: ' + e.message);
+            }
+            
+            // Step 3: Test GET (pull)
+            try {
+                const token = getGistToken();
+                const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
+                    headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const file = data.files[GIST_CONFIG.fileName];
+                    if (file) {
+                        const parsed = JSON.parse(file.content);
+                        results.push('✅ 云端拉取成功: HTTP ' + resp.status + ', 云端有 ' + (parsed.oa_users||[]).length + '个用户');
+                    } else {
+                        results.push('⚠️ 云端数据文件中未找到 oa-data.json');
+                    }
+                } else {
+                    const errText = await resp.text().catch(()=>'N/A');
+                    results.push('❌ 云端拉取失败: HTTP ' + resp.status + ' ' + resp.statusText + ' | ' + errText.substring(0,150));
+                }
+            } catch(e) {
+                results.push('❌ 云端拉取异常: ' + e.message + ' (可能是网络问题或CORS被阻止)');
+            }
+            
+            // Step 4: Test PATCH (push) - read current data, push back unchanged
+            try {
+                const token = getGistToken();
+                const getResp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
+                    headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+                });
+                if (!getResp.ok) {
+                    results.push('⚠️ 跳过推送测试(拉取失败)');
+                } else {
+                    const data = await getResp.json();
+                    const currentContent = data.files[GIST_CONFIG.fileName].content;
+                    const patchResp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': 'token ' + token,
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            files: { [GIST_CONFIG.fileName]: { content: currentContent } }
+                        })
+                    });
+                    if (patchResp.ok) {
+                        results.push('✅ 云端推送成功: HTTP ' + patchResp.status + ' (写入测试通过)');
+                    } else {
+                        const errText = await patchResp.text().catch(()=>'N/A');
+                        results.push('❌ 云端推送失败: HTTP ' + patchResp.status + ' ' + patchResp.statusText + ' | ' + errText.substring(0,150));
+                    }
+                }
+            } catch(e) {
+                results.push('❌ 云端推送异常: ' + e.message);
+            }
+            
+            // Step 5: Check _gistSyncing lock
+            results.push((_gistSyncing ? '⚠️ 同步锁被占用(可能导致自动同步跳过)' : '✅ 同步锁正常(未占用)'));
+            
+            // Step 6: Show network info
+            results.push('📍 当前页面Origin: ' + window.location.origin);
+            results.push('📍 GitHub API: https://api.github.com');
+            
+            debugEl.innerHTML = results.join('<br>') + '<br><small style="color:#888;">诊断时间: ' + new Date().toLocaleString('zh-CN') + '</small>';
         }
 
         function renderCloudSync() {
@@ -2492,7 +2629,7 @@ function debounceSyncUsers() {
                 statusEl.textContent = '⚠️ 同步异常';
                 statusEl.style.color = 'var(--danger)';
                 debugEl.style.display = 'block';
-                debugEl.innerHTML = `⚠️ ${_lastSyncError}`;
+                debugEl.innerHTML = `⚠️ ${_lastSyncError}<br>📋 详情: ${_lastSyncDetail || '无详细信息'}`;
                 debugEl.style.color = 'var(--danger)';
             } else {
                 statusEl.textContent = '✅ 已连接';
