@@ -1602,15 +1602,6 @@
                 users.unshift({ id: 'admin', name: '江子俊', username: 'admin', phone: adminPhone, email: 'admin@wonderlab.com', password: '123456', role: 'admin', feishu: { bound: true, name: '江子俊', avatar: null }, createdAt: Date.now() });
                 changed = true;
             }
-            // Init demo users if empty
-            if (users.length <= 1) {
-                const demos = [
-                    { id: 'approver', name: '审批人', username: 'approver', phone: '13800000002', email: 'approver@wonderlab.com', password: '123456', role: 'approver', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() },
-                    { id: 'user', name: '普通用户', username: 'user', phone: '13800000003', email: 'user@wonderlab.com', password: '123456', role: 'user', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() }
-                ];
-                users.push(...demos);
-                changed = true;
-            }
             // Backfill username for existing users who don't have one
             users.forEach(u => {
                 if (!u.username && u.id) { u.username = u.id; changed = true; }
