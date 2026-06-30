@@ -1348,16 +1348,18 @@ async function pushToGist(users) {
     }
 }
 
-// Sync from cloud: pull from Gist, replace localStorage
+// Sync from cloud: pull from Gist, merge with local (cloud wins, local-only preserved)
 async function syncFromCloud() {
     if (_gistSyncing) return false;
     _gistSyncing = true;
     try {
         updateSyncIndicator('syncing', '同步中...');
-        const users = await pullFromGist();
-        if (users !== null) {
-            localStorage.setItem('oa_users', JSON.stringify(users));
-            updateSyncIndicator('success', '已同步 ' + users.length + ' 人');
+        const cloudUsers = await pullFromGist();
+        if (cloudUsers !== null) {
+            const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
+            const merged = mergeUsers(localUsers, cloudUsers, false);
+            localStorage.setItem('oa_users', JSON.stringify(merged));
+            updateSyncIndicator('success', '已同步 ' + merged.length + ' 人');
             _gistSyncing = false;
             return true;
         }
@@ -1372,6 +1374,32 @@ async function syncFromCloud() {
     }
 }
 
+// Bidirectional merge: combine local and cloud users without data loss
+// Strategy: union of both sides; for conflicts (same user edited on both sides),
+// the "localVersion" wins. Users only in one side are preserved.
+// NEVER removes users — deletion is not safe without a tombstone mechanism.
+function mergeUsers(localUsers, cloudUsers, localWins) {
+    const merged = [...cloudUsers];
+    const cloudMap = {};
+    cloudUsers.forEach(u => { cloudMap[u.id] = u; });
+
+    localUsers.forEach(u => {
+        if (cloudMap[u.id]) {
+            // User exists in both — replace cloud version with local if localWins
+            if (localWins) {
+                const idx = merged.findIndex(cu => cu.id === u.id);
+                if (idx >= 0) merged[idx] = u;
+            }
+        } else {
+            // User only in local — add to merged
+            merged.push(u);
+        }
+    });
+
+    // Users only in cloud are already in merged (from the initial copy)
+    return merged;
+}
+
 // Sync to cloud: pull latest → merge with local → push back
 async function syncToCloud() {
     if (_gistSyncing) return false;
@@ -1380,46 +1408,19 @@ async function syncToCloud() {
         // Step 1: Pull latest from cloud
         const cloudUsers = await pullFromGist();
         if (cloudUsers === null) { _gistSyncing = false; return false; }
-        
+
         // Step 2: Get local data
         const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
-        
-        // Step 3: Merge - cloud as base, apply local additions/changes
-        const cloudMap = {};
-        cloudUsers.forEach(u => { cloudMap[u.id] = u; });
-        const localMap = {};
-        localUsers.forEach(u => { localMap[u.id] = u; });
-        
-        let merged = [...cloudUsers];
-        
-        // Add new users from local that don't exist in cloud
-        localUsers.forEach(u => {
-            if (!cloudMap[u.id]) {
-                merged.push(u);
-            }
-        });
-        
-        // Update existing users: local wins if it has changes
-        merged = merged.map(u => {
-            if (localMap[u.id]) {
-                // Local version wins (it has the latest changes)
-                return localMap[u.id];
-            }
-            return u;
-        });
-        
-        // Handle deletions: if local has fewer users, remove deleted ones
-        if (localUsers.length < cloudUsers.length) {
-            const localIds = new Set(localUsers.map(u => u.id));
-            merged = merged.filter(u => localIds.has(u.id));
-        }
-        
+
+        // Step 3: Merge — local wins for conflicts, all users from both sides preserved
+        const merged = mergeUsers(localUsers, cloudUsers, true);
+
         // Step 4: Push merged data
         const ok = await pushToGist(merged);
-        
+
         // Step 5: Update localStorage
         localStorage.setItem('oa_users', JSON.stringify(merged));
-        
+
         updateSyncIndicator('success', '已同步 ' + merged.length + ' 人');
         _gistSyncing = false;
         return ok;
@@ -1431,20 +1432,27 @@ async function syncToCloud() {
     }
 }
 
-// Background sync: check cloud for updates, update local if different
+// Background sync: pull cloud data and merge bidirectionally with local
+// Cloud wins for conflicts (to pick up changes from other devices),
+// but local-only users are always preserved (never overwritten).
 async function backgroundSync() {
     if (_gistSyncing) return;
+    _gistSyncing = true;
     try {
         const cloudUsers = await pullFromGist();
-        if (cloudUsers === null) return;
+        if (cloudUsers === null) { _gistSyncing = false; return; }
         const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
-        if (JSON.stringify(cloudUsers) !== JSON.stringify(localUsers)) {
-            localStorage.setItem('oa_users', JSON.stringify(cloudUsers));
-            updateSyncIndicator('success', '已同步 ' + cloudUsers.length + ' 人');
+        // Merge: cloud wins for conflicts, local-only users preserved
+        const merged = mergeUsers(localUsers, cloudUsers, false);
+        if (JSON.stringify(merged) !== JSON.stringify(localUsers)) {
+            localStorage.setItem('oa_users', JSON.stringify(merged));
+            updateSyncIndicator('success', '已同步 ' + merged.length + ' 人');
             refreshCurrentView();
         }
+        _gistSyncing = false;
     } catch (e) {
         console.warn('[Gist] Background sync error:', e);
+        _gistSyncing = false;
     }
 }
 
