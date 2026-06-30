@@ -2100,7 +2100,7 @@ function debounceSyncUsers() {
                     <td>${u.email||'-'}</td>
                     <td><span class="tag ${roleColors[u.role]||'tag-gray'}">${roleLabels[u.role]||u.role}</span></td>
                     <td>${feishuHtml}</td>
-                    <td>${u.createdAt||'-'}</td>
+                    <td>${u.createdAt ? (typeof u.createdAt === 'number' ? new Date(u.createdAt).toLocaleString('zh-CN') : u.createdAt) : '-'}</td>
                     <td>${statusHtml}</td>
                     <td>
                         <button class="btn btn-default" style="padding:4px 10px;font-size:12px;" onclick="openUserEdit('${u.id}')">编辑</button>
