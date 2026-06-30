@@ -830,6 +830,10 @@
                     <span class="page-title" id="currentPageTitle">申请提交</span>
                 </div>
                 <div class="header-right">
+                    <span id="syncIndicator" title="云同步状态" style="font-size:12px;color:var(--gray);cursor:pointer;display:flex;align-items:center;gap:4px;margin-right:8px;" onclick="backgroundSync().then(()=>{if(currentPage==='user-manage')renderUserManage();else if(currentPage==='cloud-sync')renderCloudSync();})">
+                        <span id="syncIcon" style="font-size:16px;">☁️</span>
+                        <span id="syncLabel" style="font-size:11px;">同步中...</span>
+                    </span>
                     <div style="position: relative;">
                         <button class="notification-btn" id="notificationBtn">🔔</button>
                         <span class="notification-badge hidden" id="notificationBadge">0</span>
@@ -1364,6 +1368,78 @@
             }, 1500);
         }
 
+        // ========== Auto Background Sync (every 30s) ==========
+        let _autoSyncInterval = null;
+        let _lastUserCount = 0;
+
+        function updateSyncIndicator(status, label) {
+            const icon = document.getElementById('syncIcon');
+            const lbl = document.getElementById('syncLabel');
+            if (!icon || !lbl) return;
+            if (status === 'syncing') {
+                icon.textContent = '🔄';
+                icon.style.animation = 'spin 1s linear infinite';
+                lbl.textContent = '同步中...';
+                lbl.style.color = 'var(--warning, #f59e0b)';
+            } else if (status === 'success') {
+                icon.textContent = '✅';
+                icon.style.animation = '';
+                lbl.textContent = label || '已同步';
+                lbl.style.color = 'var(--success)';
+            } else if (status === 'error') {
+                icon.textContent = '❌';
+                icon.style.animation = '';
+                lbl.textContent = label || '同步失败';
+                lbl.style.color = 'var(--danger, #ef4444)';
+            }
+        }
+
+        async function backgroundSync() {
+            if (_syncing) return;
+            try {
+                // Snapshot before sync
+                const usersBefore = localStorage.getItem('oa_users') || '[]';
+                _syncing = true;
+                updateSyncIndicator('syncing');
+                await syncFromCloud();
+                localStorage.setItem('oa_last_sync', Date.now().toString());
+                _syncing = false;
+                // Check if data changed
+                const usersAfter = localStorage.getItem('oa_users') || '[]';
+                if (usersBefore !== usersAfter) {
+                    console.log('[AutoSync] Data changed, refreshing UI');
+                    refreshCurrentView();
+                }
+                const lastSync = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+                updateSyncIndicator('success', '已同步 ' + lastSync);
+            } catch(e) {
+                _syncing = false;
+                updateSyncIndicator('error', '同步失败');
+                console.warn('[AutoSync] Background sync failed:', e);
+            }
+        }
+
+        function refreshCurrentView() {
+            // Re-init data from localStorage
+            initUsers();
+            initSampleData();
+            updateBadges();
+            // Re-render current page
+            if (currentPage === 'user-manage') renderUserManage();
+            else if (currentPage === 'personnel') renderPersonnel();
+            else if (currentPage === 'approval') renderApproval();
+            else if (currentPage === 'my-apply') renderMyApply();
+            else if (currentPage === 'dashboard') renderDashboard();
+            else if (currentPage === 'cloud-sync') renderCloudSync();
+        }
+
+        function startAutoSync() {
+            if (_autoSyncInterval) return;
+            // Sync every 30 seconds
+            _autoSyncInterval = setInterval(backgroundSync, 30000);
+            console.log('[AutoSync] Background sync started (every 30s)');
+        }
+
         async function manualSync() {
             const token = getSyncToken();
             if (!token) { showToast('未配置同步Token，请先在管理设置中配置', 'error'); return false; }
@@ -1371,8 +1447,10 @@
             try {
                 await syncFromCloud();
                 await syncToCloudNow();
+                localStorage.setItem('oa_last_sync', Date.now().toString());
                 hideLoading();
                 showToast('云同步完成 ✓', 'success');
+                refreshCurrentView();
                 return true;
             } catch(e) { hideLoading(); showToast('同步失败: ' + e.message, 'error'); return false; }
         }
@@ -2114,8 +2192,8 @@
             else if (page === 'approval') renderApproval();
             else if (page === 'personnel') renderPersonnel();
             else if (page === 'dashboard') renderDashboard();
-            else if (page === 'user-manage') renderUserManage();
-            else if (page === 'cloud-sync') renderCloudSync();
+            else if (page === 'user-manage') { backgroundSync().then(() => renderUserManage()); }
+            else if (page === 'cloud-sync') { backgroundSync().then(() => renderCloudSync()); }
         }
 
         document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => navigateTo(item.dataset.page)));
@@ -2291,6 +2369,8 @@
             initAuthUI(); initApplyPage(); initUserManageUI(); initCloudSyncUI();
             if (currentUser) { showApp(); }
             updateBadges();
+            // Start background auto-sync (every 30s)
+            startAutoSync();
         }
         init();
     </script>
