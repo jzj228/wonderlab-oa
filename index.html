@@ -2289,6 +2289,23 @@ function debounceSyncUsers() {
 
         function updateBadges() { const apps = getApplications(); document.getElementById('approvalBadge').textContent = apps.filter(a=>a.status==='pending').length; }
 
+        // Force pull from cloud and render — bypasses _gistSyncing lock
+        async function forcePullAndRender(targetPage) {
+            try {
+                const cloudUsers = await pullFromGist();
+                if (cloudUsers !== null) {
+                    const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
+                    const merged = mergeUsers(localUsers, cloudUsers, false);
+                    localStorage.setItem('oa_users', JSON.stringify(merged));
+                }
+            } catch (e) {
+                console.warn('[Gist] forcePull error:', e);
+            }
+            // Always render regardless of sync result
+            if (targetPage === 'user-manage') renderUserManage();
+            else if (targetPage === 'cloud-sync') renderCloudSync();
+        }
+
         // ========== Navigation ==========
         function navigateTo(page) {
             currentPage = page;
@@ -2302,8 +2319,8 @@ function debounceSyncUsers() {
             else if (page === 'approval') renderApproval();
             else if (page === 'personnel') renderPersonnel();
             else if (page === 'dashboard') renderDashboard();
-            else if (page === 'user-manage') { backgroundSync().then(() => renderUserManage()); }
-            else if (page === 'cloud-sync') { backgroundSync().then(() => renderCloudSync()); }
+            else if (page === 'user-manage') { forcePullAndRender('user-manage'); }
+            else if (page === 'cloud-sync') { forcePullAndRender('cloud-sync'); }
         }
 
         document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => navigateTo(item.dataset.page)));
