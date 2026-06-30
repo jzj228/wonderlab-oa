@@ -4,7 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>万益蓝客服账号OA系统</title>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script>
+        // QRCode library - async load with fallback
+        window.QRCode = function(el, opts) { el.innerHTML = '<div style="text-align:center;padding:30px;font-size:13px;color:#999;">二维码组件加载中...</div>'; };
+        window.QRCode.CorrectLevel = { M: 0 };
+        (function() {
+            var s = document.createElement('script');
+            s.src = 'https://cdn.bootcdn.net/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+            s.async = true;
+            s.onerror = function() { console.warn('QRCode CDN failed, using fallback'); };
+            s.onload = function() { console.log('QRCode library loaded'); };
+            document.head.appendChild(s);
+        })();
+    </script>
     <style>
         :root {
             --primary: #1677ff;
@@ -1218,7 +1230,8 @@
 
         // ========== Notification System ==========
         let notifications = load(KEYS.notifications) || [];
-        let notificationPermissionGranted = Notification.permission === 'granted';
+        let notificationPermissionGranted = false;
+        try { notificationPermissionGranted = typeof Notification !== 'undefined' && Notification.permission === 'granted'; } catch(e) {}
 
         function getNotifications() { return notifications; }
         function addNotification(type, title, content, relatedId = null) {
@@ -1413,7 +1426,7 @@
             navigateTo('apply');
             updateNotificationBadge();
             renderNotificationList();
-            if (Notification.permission === 'default') { document.getElementById('notificationPermission').classList.remove('hidden'); }
+            try { if (typeof Notification !== 'undefined' && Notification.permission === 'default') { document.getElementById('notificationPermission').classList.remove('hidden'); } } catch(e) {}
             document.getElementById('enableNotification').addEventListener('click', requestNotificationPermission);
         }
 
