@@ -833,7 +833,7 @@
                     <span class="page-title" id="currentPageTitle">申请提交</span>
                 </div>
                 <div class="header-right">
-                    <span id="syncIndicator" title="云同步状态" style="font-size:12px;color:var(--gray);cursor:pointer;display:flex;align-items:center;gap:4px;margin-right:8px;" onclick="backgroundSync().then(()=>{if(currentPage==='user-manage')renderUserManage();else if(currentPage==='cloud-sync')renderCloudSync();})">
+                    <span id="syncIndicator" title="云同步状态" style="font-size:12px;color:var(--gray);cursor:pointer;display:flex;align-items:center;gap:4px;margin-right:8px;" onclick="manualSync()">
                         <span id="syncIcon" style="font-size:16px;">☁️</span>
                         <span id="syncLabel" style="font-size:11px;">同步中...</span>
                     </span>
@@ -1120,16 +1120,16 @@
                 </div>
             </div>
 
-            <!-- Cloud Sync Page -->
+            <!-- Cloud Sync Page (Simplified - Feishu Bitable) -->
             <div class="page" id="page-cloud-sync">
-                <div class="page-header"><h1 class="page-title">☁️ 云同步</h1><p class="page-desc">多设备数据自动同步，所有设备共享同一份数据</p></div>
+                <div class="page-header"><h1 class="page-title">☁️ 数据同步</h1><p class="page-desc">飞书多维表格云端存储，多设备实时同步</p></div>
                 <div class="page-body">
                     <div style="max-width:600px;">
                         <div style="background:var(--white);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:20px;">
-                            <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">🔄 数据同步</h3>
+                            <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">🔄 数据同步状态</h3>
                             <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
                                 <button class="btn btn-primary" id="syncNowBtn">立即同步</button>
-                                <span id="syncStatus" style="font-size:13px;color:var(--success);">✅ 自动同步已启用</span>
+                                <span id="syncStatus" style="font-size:13px;color:var(--success);">✅ 已连接飞书</span>
                             </div>
                             <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
                                 <div id="syncLastTime">上次同步：系统启动时自动同步</div>
@@ -1139,34 +1139,39 @@
 
                         <div style="background:var(--success-bg);border-radius:var(--radius);padding:16px;border-left:4px solid var(--success);margin-bottom:20px;">
                             <p style="font-size:13px;color:#1a6b1a;line-height:1.6;">
-                                <strong>✅ 自动同步已配置</strong><br>
-                                系统已内置同步凭证，所有设备打开网页即可自动同步数据，无需手动配置。
+                                <strong>✅ 飞书多维表格已配置</strong><br>
+                                数据存储在飞书多维表格中，所有设备打开网页即可自动同步最新数据。
                             </p>
                         </div>
 
                         <div style="background:var(--white);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:20px;">
-                            <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">🔑 Token 管理（可选）</h3>
+                            <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">📋 飞书表格</h3>
                             <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;line-height:1.6;">
-                                如需更换同步凭证，可在此配置新的 GitHub Token。
+                                <a href="https://imrm1t9197.feishu.cn/base/R7JIbh4uVaB4Bps8W40cAX2anlz" target="_blank" style="color:var(--primary);">点击打开飞书多维表格 →</a>
                             </p>
-                            <div class="form-group">
-                                <label class="form-label">自定义 GitHub Token（留空则使用内置凭证）</label>
-                                <input type="password" class="form-input" id="syncTokenInput" placeholder="留空 = 使用内置凭证" style="font-family:monospace;">
-                            </div>
-                            <div style="display:flex;gap:10px;align-items:center;">
-                                <button class="btn btn-primary" id="saveSyncTokenBtn">保存自定义 Token</button>
-                                <button class="btn btn-default" id="clearSyncTokenBtn">恢复内置凭证</button>
-                                <span id="syncTokenStatus" style="font-size:12px;color:var(--gray);"></span>
+                            <div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;">
+                                <div style="margin-bottom:8px;"><strong>表格字段说明：</strong></div>
+                                <div style="color:var(--text-secondary);line-height:1.8;">
+                                    • 用户ID：唯一标识符<br>
+                                    • 姓名：用户真实姓名<br>
+                                    • 手机号：登录账号<br>
+                                    • 邮箱：可选<br>
+                                    • 角色：admin/approver/user<br>
+                                    • 密码：登录密码<br>
+                                    • 状态：active/disabled<br>
+                                    • 飞书绑定：JSON格式<br>
+                                    • 创建时间：注册时间
+                                </div>
                             </div>
                         </div>
 
                         <div style="background:var(--info-bg, #eff6ff);border-radius:var(--radius);padding:16px;border-left:4px solid var(--primary);">
                             <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">
                                 <strong>📖 同步机制说明：</strong><br>
-                                1. 打开网页时自动从云端拉取最新数据<br>
-                                2. 任何数据修改后 1.5 秒自动同步到云端<br>
-                                3. 采用合并策略：云端数据优先，本地独有数据保留<br>
-                                4. 所有设备实时共享同一份数据
+                                1. 打开网页时自动从飞书拉取最新数据<br>
+                                2. 任何数据修改后自动同步到飞书<br>
+                                3. 每60秒自动检查飞书是否有更新<br>
+                                4. 飞书表格为唯一数据源
                             </p>
                         </div>
                     </div>
@@ -1297,240 +1302,352 @@
             observer.observe(gate, { attributes: true, attributeFilter: ['class'] });
         })();
 
-        // ========== Cloud Sync (GitHub Gist) ==========
-        const GIST_CONFIG = {
-            id: '39f757ff5cbaad763b53de029a508235',
-            filename: 'oa-data.json',
-            tokenKey: 'oa_sync_token',
-            _enc: [16,6,26,12,16,16,51,17,3,3,48,95,85,39,64,42,36,51,56,54,94,52,63,57,60,34,90,61,89,61,15,84,24,51,10,90,79,88,33,83,8,39,14,89,87,16,11,8,44,8,25,11,21,91,38,38,88,32,52,26,20,54,15,78,9,39,60,8,5,62,5,8,53,22,95,86,13,63,40,47,42,51,45,32,45,83,7,59,84,42,50,55,87],
-            get builtInToken() {
-                const k='wonderlab'; let r='';
-                for(let i=0;i<this._enc.length;i++) r+=String.fromCharCode(this._enc[i]^k.charCodeAt(i%k.length));
-                return r;
+        // ========== Feishu Bitable Cloud Sync ==========
+// 飞书应用凭证
+const FEISHU_CONFIG = {
+    appId: 'cli_a939118c75789bc0',
+    appSecret: 'mOrwPCEYOpPVcWBbBgI1JcwkWS0d87DU',
+    baseToken: 'R7JIbh4uVaB4Bps8W40cAX2anlz',
+    tableId: 'tblo6rlZRxr6C6i9'
+};
+
+let _feishuToken = null;
+let _feishuTokenExpire = 0;
+let _feishuSyncing = false;
+
+// 获取飞书 tenant_access_token
+async function getFeishuToken() {
+    if (_feishuToken && Date.now() < _feishuTokenExpire - 60000) {
+        return _feishuToken;
+    }
+    try {
+        const resp = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                app_id: FEISHU_CONFIG.appId,
+                app_secret: FEISHU_CONFIG.appSecret
+            })
+        });
+        const data = await resp.json();
+        if (data.code === 0) {
+            _feishuToken = data.tenant_access_token;
+            _feishuTokenExpire = Date.now() + (data.expire - 60) * 1000;
+            return _feishuToken;
+        } else {
+            console.warn('[Feishu] Token获取失败:', data.msg);
+            return null;
+        }
+    } catch (e) {
+        console.warn('[Feishu] Token获取异常:', e);
+        return null;
+    }
+}
+
+// 从飞书多维表格读取所有记录
+async function fetchFeishuRecords() {
+    const token = await getFeishuToken();
+    if (!token) return null;
+    try {
+        const resp = await fetch(
+            `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_CONFIG.baseToken}/tables/${FEISHU_CONFIG.tableId}/records?page_size=500`,
+            { headers: { 'Authorization': 'Bearer ' + token } }
+        );
+        const data = await resp.json();
+        if (data.code === 0) {
+            return data.data.items || [];
+        } else {
+            console.warn('[Feishu] 读取记录失败:', data.msg);
+            return null;
+        }
+    } catch (e) {
+        console.warn('[Feishu] 读取记录异常:', e);
+        return null;
+    }
+}
+
+// 创建飞书记录
+async function createFeishuRecord(recordData) {
+    const token = await getFeishuToken();
+    if (!token) return false;
+    try {
+        const resp = await fetch(
+            `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_CONFIG.baseToken}/tables/${FEISHU_CONFIG.tableId}/records`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fields: recordData })
             }
-        };
-        let _syncTimer = null;
-        let _syncing = false;
+        );
+        const data = await resp.json();
+        return data.code === 0;
+    } catch (e) {
+        console.warn('[Feishu] 创建记录异常:', e);
+        return false;
+    }
+}
 
-        function getSyncToken() { return localStorage.getItem(GIST_CONFIG.tokenKey) || GIST_CONFIG.builtInToken; }
+// 更新飞书记录
+async function updateFeishuRecord(recordId, recordData) {
+    const token = await getFeishuToken();
+    if (!token) return false;
+    try {
+        const resp = await fetch(
+            `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_CONFIG.baseToken}/tables/${FEISHU_CONFIG.tableId}/records/${recordId}`,
+            {
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fields: recordData })
+            }
+        );
+        const data = await resp.json();
+        return data.code === 0;
+    } catch (e) {
+        console.warn('[Feishu] 更新记录异常:', e);
+        return false;
+    }
+}
 
-        async function syncFromCloud() {
-            const token = getSyncToken();
-            if (!token) return false;
-            try {
-                const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.id, {
-                    headers: { 'Authorization': 'token ' + token }
-                });
-                if (!resp.ok) {
-                    if (resp.status === 401 || resp.status === 403) {
-                        localStorage.removeItem(GIST_CONFIG.tokenKey);
-                        showToast('同步Token已失效，请在管理设置中重新配置', 'error');
-                    }
-                    return false;
-                }
-                const data = await resp.json();
-                const file = data.files[GIST_CONFIG.filename];
-                if (!file) return false;
-                const cloudData = JSON.parse(file.content);
-                // Cloud is authoritative: completely replace local data
-                ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
-                    if (cloudData[key] !== undefined) {
-                        localStorage.setItem(key, JSON.stringify(cloudData[key]));
-                    }
-                });
-                // Update last sync time
-                localStorage.setItem('oa_last_sync_time', Date.now().toString());
-                console.log('[CloudSync] Pulled data from cloud (cloud authoritative)');
-                return true;
-            } catch(e) { console.warn('[CloudSync] Pull failed:', e); return false; }
+// 删除飞书记录
+async function deleteFeishuRecord(recordId) {
+    const token = await getFeishuToken();
+    if (!token) return false;
+    try {
+        const resp = await fetch(
+            `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_CONFIG.baseToken}/tables/${FEISHU_CONFIG.tableId}/records/${recordId}`,
+            {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            }
+        );
+        const data = await resp.json();
+        return data.code === 0;
+    } catch (e) {
+        console.warn('[Feishu] 删除记录异常:', e);
+        return false;
+    }
+}
+
+// 字段映射：本地数据 -> 飞书字段
+function userToFeishuFields(user) {
+    return {
+        '用户ID': user.id || '',
+        '姓名': user.name || '',
+        '手机号': user.phone || '',
+        '邮箱': user.email || '',
+        '角色': user.role || 'user',
+        '密码': user.password || '',
+        '状态': user.status || 'active',
+        '飞书绑定': user.feishu ? JSON.stringify(user.feishu) : '',
+        '创建时间': user.createdAt || new Date().toLocaleString('zh-CN')
+    };
+}
+
+// 字段映射：飞书字段 -> 本地数据
+function feishuToUser(record) {
+    const fields = record.fields || {};
+    const feishuStr = fields['飞书绑定'] || '';
+    let feishu = null;
+    try {
+        if (feishuStr) feishu = JSON.parse(feishuStr);
+    } catch (e) {}
+    return {
+        id: fields['用户ID'] || record.record_id,
+        name: fields['姓名'] || '',
+        phone: fields['手机号'] || '',
+        email: fields['邮箱'] || '',
+        role: fields['角色'] || 'user',
+        password: fields['密码'] || '',
+        status: fields['状态'] || 'active',
+        feishu: feishu,
+        createdAt: fields['创建时间'] || ''
+    };
+}
+
+// 从飞书同步数据到本地
+async function syncFromFeishu() {
+    if (_feishuSyncing) return;
+    try {
+        _feishuSyncing = true;
+        updateSyncIndicator('syncing');
+        const records = await fetchFeishuRecords();
+        if (records === null) {
+            updateSyncIndicator('error', '同步失败');
+            return false;
         }
+        const users = records.map(r => feishuToUser(r));
+        localStorage.setItem('oa_users', JSON.stringify(users));
+        localStorage.setItem('oa_last_sync', Date.now().toString());
+        localStorage.setItem('oa_last_sync_time', Date.now().toString());
+        _feishuSyncing = false;
+        updateSyncIndicator('success', '已同步');
+        console.log('[FeishuSync] Pulled', users.length, 'users from Feishu Bitable');
+        return true;
+    } catch (e) {
+        _feishuSyncing = false;
+        updateSyncIndicator('error', '同步失败');
+        console.warn('[FeishuSync] Pull failed:', e);
+        return false;
+    }
+}
 
-        async function syncToCloudNow() {
-            const token = getSyncToken();
-            if (!token) return false;
-            try {
-                // Step 1: Pull latest cloud data first
-                const pullResp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.id, {
-                    headers: { 'Authorization': 'token ' + token }
-                });
-                if (!pullResp.ok) {
-                    if (pullResp.status === 401 || pullResp.status === 403) {
-                        localStorage.removeItem(GIST_CONFIG.tokenKey);
-                        showToast('同步Token已失效，请在管理设置中重新配置', 'error');
-                    }
-                    return false;
-                }
-                const gistData = await pullResp.json();
-                const file = gistData.files[GIST_CONFIG.filename];
-                if (!file) return false;
-                const cloudData = JSON.parse(file.content);
-
-                // Step 2: Merge with smart conflict resolution
-                // - Cloud is authoritative for deletions
-                // - Local additions (created after last sync) are preserved
-                const lastSyncTime = parseInt(localStorage.getItem('oa_last_sync_time') || '0');
-                const payload = {};
-                
-                ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
-                    const cloudItems = cloudData[key] || [];
-                    const localRaw = localStorage.getItem(key);
-                    const localItems = localRaw ? JSON.parse(localRaw) : [];
-                    
-                    // Build cloud map
-                    const cloudMap = {};
-                    cloudItems.forEach(item => { cloudMap[item.id] = item; });
-                    
-                    // Start with cloud data as base
-                    const merged = cloudItems.slice();
-                    const mergedIds = new Set(cloudItems.map(item => item.id));
-                    
-                    // Add local-only items that were created after last sync (new additions)
-                    localItems.forEach(item => {
-                        if (!mergedIds.has(item.id)) {
-                            // Only add if it's a recent addition (created after last sync)
-                            const itemTime = item.createdAt || item.updatedAt || 0;
-                            if (itemTime > lastSyncTime) {
-                                merged.push(item);
-                                mergedIds.add(item.id);
-                            }
-                        }
-                    });
-                    
-                    payload[key] = merged;
-                    // Update local with merged result
-                    localStorage.setItem(key, JSON.stringify(merged));
-                });
-
-                // Step 3: Push merged data to cloud
-                const files = {};
-                files[GIST_CONFIG.filename] = { content: JSON.stringify(payload, null, 2) };
-                const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.id, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': 'token ' + token,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ files: files })
-                });
-                if (!resp.ok) {
-                    if (resp.status === 401 || resp.status === 403) {
-                        localStorage.removeItem(GIST_CONFIG.tokenKey);
-                        showToast('同步Token已失效，请在管理设置中重新配置', 'error');
-                    }
-                    return false;
-                }
-                
-                // Update last sync time after successful push
-                localStorage.setItem('oa_last_sync_time', Date.now().toString());
-                console.log('[CloudSync] Pulled, merged, and pushed data to cloud');
-                return true;
-            } catch(e) { console.warn('[CloudSync] Sync failed:', e); return false; }
+// 将本地数据同步到飞书（增量同步）
+async function syncToFeishu() {
+    const token = await getFeishuToken();
+    if (!token) return false;
+    try {
+        const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
+        const existingRecords = await fetchFeishuRecords() || [];
+        const existingMap = {};
+        existingRecords.forEach(r => { existingMap[r.fields['用户ID']] = r; });
+        const localIds = new Set(localUsers.map(u => u.id));
+        const existingIds = new Set(existingRecords.map(r => r.fields['用户ID']));
+        
+        // 找出需要新增、更新、删除的记录
+        const toCreate = localUsers.filter(u => !existingIds.has(u.id));
+        const toUpdate = localUsers.filter(u => existingIds.has(u.id));
+        const toDelete = existingRecords.filter(r => !localIds.has(r.fields['用户ID']));
+        
+        // 执行新增
+        for (const user of toCreate) {
+            await createFeishuRecord(userToFeishuFields(user));
         }
-
-        function syncToCloudDebounced() {
-            if (!getSyncToken()) return;
-            clearTimeout(_syncTimer);
-            _syncTimer = setTimeout(function() {
-                if (_syncing) { setTimeout(function() { syncToCloudDebounced(); }, 1000); return; }
-                _syncing = true;
-                syncToCloudNow().finally(function() { _syncing = false; });
-            }, 1500);
-        }
-
-        // ========== Auto Background Sync (every 30s) ==========
-        let _autoSyncInterval = null;
-        let _lastUserCount = 0;
-
-        function updateSyncIndicator(status, label) {
-            const icon = document.getElementById('syncIcon');
-            const lbl = document.getElementById('syncLabel');
-            if (!icon || !lbl) return;
-            if (status === 'syncing') {
-                icon.textContent = '🔄';
-                icon.style.animation = 'spin 1s linear infinite';
-                lbl.textContent = '同步中...';
-                lbl.style.color = 'var(--warning, #f59e0b)';
-            } else if (status === 'success') {
-                icon.textContent = '✅';
-                icon.style.animation = '';
-                lbl.textContent = label || '已同步';
-                lbl.style.color = 'var(--success)';
-            } else if (status === 'error') {
-                icon.textContent = '❌';
-                icon.style.animation = '';
-                lbl.textContent = label || '同步失败';
-                lbl.style.color = 'var(--danger, #ef4444)';
+        
+        // 执行更新
+        for (const user of toUpdate) {
+            const existing = existingRecords.find(r => r.fields['用户ID'] === user.id);
+            if (existing) {
+                await updateFeishuRecord(existing.record_id, userToFeishuFields(user));
             }
         }
-
-        async function backgroundSync() {
-            if (_syncing) return;
-            try {
-                // Snapshot before sync
-                const usersBefore = localStorage.getItem('oa_users') || '[]';
-                _syncing = true;
-                updateSyncIndicator('syncing');
-                await syncFromCloud();
-                localStorage.setItem('oa_last_sync', Date.now().toString());
-                _syncing = false;
-                // Check if data changed
-                const usersAfter = localStorage.getItem('oa_users') || '[]';
-                if (usersBefore !== usersAfter) {
-                    console.log('[AutoSync] Data changed, refreshing UI');
-                    refreshCurrentView();
-                }
-                const lastSync = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
-                updateSyncIndicator('success', '已同步 ' + lastSync);
-            } catch(e) {
-                _syncing = false;
-                updateSyncIndicator('error', '同步失败');
-                console.warn('[AutoSync] Background sync failed:', e);
-            }
+        
+        // 执行删除
+        for (const record of toDelete) {
+            await deleteFeishuRecord(record.record_id);
         }
+        
+        console.log('[FeishuSync] Synced:', toCreate.length, 'created,', toUpdate.length, 'updated,', toDelete.length, 'deleted');
+        return true;
+    } catch (e) {
+        console.warn('[FeishuSync] Push failed:', e);
+        return false;
+    }
+}
 
-        function refreshCurrentView() {
-            // Re-init data from localStorage
-            initUsers();
-            initSampleData();
-            updateBadges();
-            // Re-render current page
-            if (currentPage === 'user-manage') renderUserManage();
-            else if (currentPage === 'personnel') renderPersonnel();
-            else if (currentPage === 'approval') renderApproval();
-            else if (currentPage === 'my-apply') renderMyApply();
-            else if (currentPage === 'dashboard') renderDashboard();
-            else if (currentPage === 'cloud-sync') renderCloudSync();
+// 更新同步状态指示器
+function updateSyncIndicator(status, label) {
+    const icon = document.getElementById('syncIcon');
+    const lbl = document.getElementById('syncLabel');
+    if (!icon || !lbl) return;
+    if (status === 'syncing') {
+        icon.textContent = '🔄';
+        icon.style.animation = 'spin 1s linear infinite';
+        lbl.textContent = '同步中...';
+        lbl.style.color = 'var(--warning, #f59e0b)';
+    } else if (status === 'success') {
+        icon.textContent = '✅';
+        icon.style.animation = '';
+        lbl.textContent = label || '已同步';
+        lbl.style.color = 'var(--success)';
+    } else if (status === 'error') {
+        icon.textContent = '❌';
+        icon.style.animation = '';
+        lbl.textContent = label || '同步失败';
+        lbl.style.color = 'var(--danger, #ef4444)';
+    }
+}
+
+// 手动同步（飞书为唯一数据源，全量拉取）
+async function backgroundSync() {
+    if (_feishuSyncing) return;
+    try {
+        const usersBefore = localStorage.getItem('oa_users') || '[]';
+        _feishuSyncing = true;
+        updateSyncIndicator('syncing');
+        await syncFromFeishu();
+        _feishuSyncing = false;
+        const usersAfter = localStorage.getItem('oa_users') || '[]';
+        if (usersBefore !== usersAfter) {
+            console.log('[FeishuSync] Data changed, refreshing UI');
+            refreshCurrentView();
         }
+        const lastSync = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+        updateSyncIndicator('success', '已同步 ' + lastSync);
+    } catch (e) {
+        _feishuSyncing = false;
+        updateSyncIndicator('error', '同步失败');
+        console.warn('[FeishuSync] Background sync failed:', e);
+    }
+}
 
-        function startAutoSync() {
-            if (_autoSyncInterval) return;
-            // Sync every 30 seconds
-            _autoSyncInterval = setInterval(backgroundSync, 30000);
-            console.log('[AutoSync] Background sync started (every 30s)');
-        }
+function refreshCurrentView() {
+    initUsers();
+    initSampleData();
+    updateBadges();
+    if (currentPage === 'user-manage') renderUserManage();
+    else if (currentPage === 'personnel') renderPersonnel();
+    else if (currentPage === 'approval') renderApproval();
+    else if (currentPage === 'my-apply') renderMyApply();
+    else if (currentPage === 'dashboard') renderDashboard();
+    else if (currentPage === 'cloud-sync') renderCloudSync();
+}
 
-        async function manualSync() {
-            const token = getSyncToken();
-            if (!token) { showToast('未配置同步Token，请先在管理设置中配置', 'error'); return false; }
-            showLoading();
-            try {
-                await syncFromCloud();
-                await syncToCloudNow();
-                localStorage.setItem('oa_last_sync', Date.now().toString());
-                hideLoading();
-                showToast('云同步完成 ✓', 'success');
-                refreshCurrentView();
-                return true;
-            } catch(e) { hideLoading(); showToast('同步失败: ' + e.message, 'error'); return false; }
-        }
+// 定期后台同步（每60秒检查一次飞书更新）
+let _autoSyncInterval = null;
+function startAutoSync() {
+    if (_autoSyncInterval) return;
+    _autoSyncInterval = setInterval(backgroundSync, 60000);
+    console.log('[FeishuSync] Auto sync started (every 60s)');
+}
 
-        // ========== Storage Keys ==========
+async function manualSync() {
+    showLoading();
+    try {
+        await syncFromFeishu();
+        localStorage.setItem('oa_last_sync', Date.now().toString());
+        hideLoading();
+        showToast('云同步完成 ✓', 'success');
+        refreshCurrentView();
+        return true;
+    } catch (e) {
+        hideLoading();
+        showToast('同步失败: ' + e.message, 'error');
+        return false;
+    }
+}
+
+// ========== Storage Keys ==========
         const KEYS = { users: 'oa_users', currentUser: 'oa_current_user', notifications: 'oa_notifications', personnel: 'oa_personnel', applications: 'oa_applications' };
 
         // ========== Utilities ==========
         function uuid() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0, v=c==='x'?r:(r&0x3|0x8); return v.toString(16); }); }
         function genOrderNo() { const d=new Date(); return `OA${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(Math.floor(Math.random()*9999)+1).padStart(4,'0')}`; }
-        function save(k, v) { localStorage.setItem(k, JSON.stringify(v)); syncToCloudDebounced(); }
+        function save(k, v) { 
+    localStorage.setItem(k, JSON.stringify(v)); 
+    // 用户表变更时同步到飞书（异步，不阻塞）
+    if (k === 'oa_users') {
+        debounceSyncUsers();
+    }
+}
+
+// 防抖：收集用户变更后批量同步到飞书
+let _userSyncTimer = null;
+let _pendingUserSync = false;
+function debounceSyncUsers() {
+    if (_userSyncTimer) clearTimeout(_userSyncTimer);
+    _userSyncTimer = setTimeout(async () => {
+        if (_pendingUserSync) return;
+        _pendingUserSync = true;
+        await syncToFeishu();
+        _pendingUserSync = false;
+    }, 2000);
+}
         function load(k) { const d=localStorage.getItem(k); return d?JSON.parse(d):null; }
         function showToast(msg, type='info') {
             const c=document.getElementById('toastContainer'), t=document.createElement('div');
@@ -2383,51 +2500,8 @@
 
         // ========== Init ==========
         function initCloudSyncUI() {
-            const tokenInput = document.getElementById('syncTokenInput');
-            const saveBtn = document.getElementById('saveSyncTokenBtn');
-            const clearBtn = document.getElementById('clearSyncTokenBtn');
             const syncNowBtn = document.getElementById('syncNowBtn');
-            const statusEl = document.getElementById('syncTokenStatus');
             const syncStatusEl = document.getElementById('syncStatus');
-
-            // Show current token status
-            const customToken = localStorage.getItem(GIST_CONFIG.tokenKey);
-            if (customToken) {
-                tokenInput.value = customToken;
-                statusEl.textContent = '✅ 使用自定义 Token';
-                statusEl.style.color = 'var(--success)';
-            } else {
-                statusEl.textContent = '✅ 使用内置凭证（自动同步中）';
-                statusEl.style.color = 'var(--success)';
-            }
-
-            saveBtn.addEventListener('click', async () => {
-                const token = tokenInput.value.trim();
-                if (!token) { showToast('请输入 Token', 'error'); return; }
-                localStorage.setItem(GIST_CONFIG.tokenKey, token);
-                statusEl.textContent = '✅ 已保存';
-                statusEl.style.color = 'var(--success)';
-                showToast('Token 已保存，正在同步...', 'success');
-                const ok = await manualSync();
-                if (ok) {
-                    syncStatusEl.textContent = '已同步';
-                    syncStatusEl.style.color = 'var(--success)';
-                    // Reload data from localStorage after sync
-                    currentUser = load(KEYS.currentUser);
-                    initUsers();
-                    initSampleData();
-                    updateBadges();
-                    renderUserManage();
-                }
-            });
-
-            clearBtn.addEventListener('click', () => {
-                localStorage.removeItem(GIST_CONFIG.tokenKey);
-                tokenInput.value = '';
-                statusEl.textContent = '✅ 已恢复内置凭证';
-                statusEl.style.color = 'var(--success)';
-                showToast('已恢复使用内置凭证', 'info');
-            });
 
             syncNowBtn.addEventListener('click', async () => {
                 syncStatusEl.textContent = '同步中...';
@@ -2436,7 +2510,6 @@
                 if (ok) {
                     syncStatusEl.textContent = '已同步';
                     syncStatusEl.style.color = 'var(--success)';
-                    // Reload current view
                     initUsers();
                     if (currentUser) currentUser = load(KEYS.currentUser);
                     if (currentPage === 'user-manage') renderUserManage();
@@ -2452,13 +2525,11 @@
         }
 
         function renderCloudSync() {
-            const token = getSyncToken();
             const statusEl = document.getElementById('syncStatus');
             const lastTimeEl = document.getElementById('syncLastTime');
             const dataInfoEl = document.getElementById('syncDataInfo');
 
-            // Auto-sync is always enabled with built-in token
-            statusEl.textContent = '✅ 自动同步已启用';
+            statusEl.textContent = '✅ 已连接飞书';
             statusEl.style.color = 'var(--success)';
 
             const lastSync = localStorage.getItem('oa_last_sync');
@@ -2468,33 +2539,21 @@
             const apps = getApplications();
             const personnel = getPersonnel();
             dataInfoEl.textContent = `数据量：用户 ${users.length} 人，工单 ${apps.length} 条，人员 ${personnel.length} 人`;
-
-            if (token) {
-                statusEl.textContent = '已连接';
-                statusEl.style.color = 'var(--success)';
-            } else {
-                statusEl.textContent = '未配置 Token';
-                statusEl.style.color = 'var(--danger)';
-            }
         }
 
-        async function init() {
-            // Try to sync from cloud first
-            const token = getSyncToken();
-            if (token) {
-                try {
-                    await syncFromCloud();
-                    localStorage.setItem('oa_last_sync', Date.now().toString());
-                    console.log('[Init] Cloud sync completed');
-                } catch(e) {
-                    console.warn('[Init] Cloud sync failed, using local data', e);
-                }
+async function init() {
+            // 启动时从飞书拉取最新数据
+            try {
+                await syncFromFeishu();
+                console.log('[Init] Feishu sync completed');
+            } catch (e) {
+                console.warn('[Init] Feishu sync failed, using local data', e);
             }
             initUsers(); initSampleData();
             initAuthUI(); initApplyPage(); initUserManageUI(); initCloudSyncUI(); initChangePasswordUI();
             if (currentUser) { showApp(); }
             updateBadges();
-            // Start background auto-sync (every 30s)
+            // 启动后台自动同步（每60秒）
             startAutoSync();
         }
         init();
