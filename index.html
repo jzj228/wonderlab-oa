@@ -1286,9 +1286,26 @@
                 const file = data.files[GIST_CONFIG.filename];
                 if (!file) return false;
                 const cloudData = JSON.parse(file.content);
-                // Merge cloud data into localStorage (cloud wins)
+                // Merge cloud data into localStorage (merge strategy: union by id)
                 ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
-                    if (cloudData[key] !== undefined) localStorage.setItem(key, JSON.stringify(cloudData[key]));
+                    if (cloudData[key] === undefined) return;
+                    var localRaw = localStorage.getItem(key);
+                    var localData = localRaw ? JSON.parse(localRaw) : [];
+                    if (!Array.isArray(localData) || localData.length === 0) {
+                        localStorage.setItem(key, JSON.stringify(cloudData[key]));
+                        return;
+                    }
+                    // Merge: cloud items + local-only items (by id)
+                    var cloudMap = {};
+                    cloudData[key].forEach(function(item) { cloudMap[item.id] = item; });
+                    var localMap = {};
+                    localData.forEach(function(item) { localMap[item.id] = item; });
+                    // Union: prefer cloud version, add local-only items
+                    var merged = cloudData[key].slice();
+                    localData.forEach(function(item) {
+                        if (!cloudMap[item.id]) merged.push(item);
+                    });
+                    localStorage.setItem(key, JSON.stringify(merged));
                 });
                 console.log('[CloudSync] Pulled data from cloud');
                 return true;
