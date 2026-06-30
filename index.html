@@ -1307,6 +1307,8 @@
                         localStorage.setItem(key, JSON.stringify(cloudData[key]));
                     }
                 });
+                // Update last sync time
+                localStorage.setItem('oa_last_sync_time', Date.now().toString());
                 console.log('[CloudSync] Pulled data from cloud (cloud authoritative)');
                 return true;
             } catch(e) { console.warn('[CloudSync] Pull failed:', e); return false; }
@@ -1316,12 +1318,59 @@
             const token = getSyncToken();
             if (!token) return false;
             try {
-                // Push local data directly to cloud
-                const payload = {};
-                ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
-                    var val = localStorage.getItem(key);
-                    if (val !== null) payload[key] = JSON.parse(val);
+                // Step 1: Pull latest cloud data first
+                const pullResp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.id, {
+                    headers: { 'Authorization': 'token ' + token }
                 });
+                if (!pullResp.ok) {
+                    if (pullResp.status === 401 || pullResp.status === 403) {
+                        localStorage.removeItem(GIST_CONFIG.tokenKey);
+                        showToast('同步Token已失效，请在管理设置中重新配置', 'error');
+                    }
+                    return false;
+                }
+                const gistData = await pullResp.json();
+                const file = gistData.files[GIST_CONFIG.filename];
+                if (!file) return false;
+                const cloudData = JSON.parse(file.content);
+
+                // Step 2: Merge with smart conflict resolution
+                // - Cloud is authoritative for deletions
+                // - Local additions (created after last sync) are preserved
+                const lastSyncTime = parseInt(localStorage.getItem('oa_last_sync_time') || '0');
+                const payload = {};
+                
+                ['oa_users', 'oa_personnel', 'oa_applications', 'oa_notifications'].forEach(function(key) {
+                    const cloudItems = cloudData[key] || [];
+                    const localRaw = localStorage.getItem(key);
+                    const localItems = localRaw ? JSON.parse(localRaw) : [];
+                    
+                    // Build cloud map
+                    const cloudMap = {};
+                    cloudItems.forEach(item => { cloudMap[item.id] = item; });
+                    
+                    // Start with cloud data as base
+                    const merged = cloudItems.slice();
+                    const mergedIds = new Set(cloudItems.map(item => item.id));
+                    
+                    // Add local-only items that were created after last sync (new additions)
+                    localItems.forEach(item => {
+                        if (!mergedIds.has(item.id)) {
+                            // Only add if it's a recent addition (created after last sync)
+                            const itemTime = item.createdAt || item.updatedAt || 0;
+                            if (itemTime > lastSyncTime) {
+                                merged.push(item);
+                                mergedIds.add(item.id);
+                            }
+                        }
+                    });
+                    
+                    payload[key] = merged;
+                    // Update local with merged result
+                    localStorage.setItem(key, JSON.stringify(merged));
+                });
+
+                // Step 3: Push merged data to cloud
                 const files = {};
                 files[GIST_CONFIG.filename] = { content: JSON.stringify(payload, null, 2) };
                 const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.id, {
@@ -1339,9 +1388,12 @@
                     }
                     return false;
                 }
-                console.log('[CloudSync] Pushed local data to cloud');
+                
+                // Update last sync time after successful push
+                localStorage.setItem('oa_last_sync_time', Date.now().toString());
+                console.log('[CloudSync] Pulled, merged, and pushed data to cloud');
                 return true;
-            } catch(e) { console.warn('[CloudSync] Push failed:', e); return false; }
+            } catch(e) { console.warn('[CloudSync] Sync failed:', e); return false; }
         }
 
         function syncToCloudDebounced() {
@@ -2298,61 +2350,4 @@
                     syncStatusEl.textContent = '已同步';
                     syncStatusEl.style.color = 'var(--success)';
                     // Reload current view
-                    initUsers();
-                    if (currentUser) currentUser = load(KEYS.currentUser);
-                    if (currentPage === 'user-manage') renderUserManage();
-                    else if (currentPage === 'my-apply') renderMyApply();
-                    else if (currentPage === 'approval') renderApproval();
-                    else if (currentPage === 'personnel') renderPersonnel();
-                    updateBadges();
-                } else {
-                    syncStatusEl.textContent = '同步失败';
-                    syncStatusEl.style.color = 'var(--danger)';
-                }
-            });
-        }
-
-        function renderCloudSync() {
-            const token = getSyncToken();
-            const statusEl = document.getElementById('syncStatus');
-            const lastTimeEl = document.getElementById('syncLastTime');
-            const dataInfoEl = document.getElementById('syncDataInfo');
-
-            // Auto-sync is always enabled with built-in token
-            statusEl.textContent = '✅ 自动同步已启用';
-            statusEl.style.color = 'var(--success)';
-
-            const lastSync = localStorage.getItem('oa_last_sync');
-            lastTimeEl.textContent = lastSync ? '上次同步：' + new Date(parseInt(lastSync)).toLocaleString('zh-CN') : '上次同步：系统启动时自动同步';
-
-            const users = getUsers();
-            const apps = getApplications();
-            const personnel = getPersonnel();
-            dataInfoEl.textContent = `数据量：用户 ${users.length} 人，工单 ${apps.length} 条，人员 ${personnel.length} 人`;
-
-            if (token) {
-                statusEl.textContent = '已连接';
-                statusEl.style.color = 'var(--success)';
-            } else {
-                statusEl.textContent = '未配置 Token';
-                statusEl.style.color = 'var(--danger)';
-            }
-        }
-
-        async function init() {
-            // Try to sync from cloud first
-            const token = getSyncToken();
-            if (token) {
-                try {
-                    await syncFromCloud();
-                    localStorage.setItem('oa_last_sync', Date.now().toString());
-                    console.log('[Init] Cloud sync completed');
-                } catch(e) {
-                    console.warn('[Init] Cloud sync failed, using local data', e);
-                }
-            }
-            initUsers(); initSampleData();
-            initAuthUI(); initApplyPage(); initUserManageUI(); initCloudSyncUI();
-            if (currentUser) { showApp(); }
-            updateBadges();
-            // Start background auto-syn
+            
