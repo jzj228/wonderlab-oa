@@ -1127,10 +1127,12 @@
                     <div style="max-width:600px;">
                         <div style="background:var(--white);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:20px;">
                             <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">🔄 数据同步状态</h3>
-                            <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
-                                <button class="btn btn-primary" id="syncNowBtn">立即同步</button>
+                            <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+                                <button class="btn btn-primary" id="syncNowBtn">从云端拉取</button>
+                                <button class="btn btn-default" id="forcePushBtn" style="border-color:var(--primary);color:var(--primary);">强制推送到云端</button>
                                 <span id="syncStatus" style="font-size:13px;color:var(--success);">✅ 已连接</span>
                             </div>
+                            <div id="syncDebugInfo" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:8px;background:#f8f9fa;border-radius:4px;display:none;"></div>
                             <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
                                 <div id="syncLastTime">上次同步：系统启动时自动同步</div>
                                 <div id="syncDataInfo">数据量：加载中...</div>
@@ -1507,12 +1509,19 @@ async function manualSync() {
 // 防抖：收集用户变更后批量同步到云端
 let _userSyncTimer = null;
 let _pendingUserSync = false;
+let _lastSyncError = null;
 function debounceSyncUsers() {
     if (_userSyncTimer) clearTimeout(_userSyncTimer);
     _userSyncTimer = setTimeout(async () => {
         if (_pendingUserSync) return;
         _pendingUserSync = true;
-        await syncToCloud();
+        _lastSyncError = null;
+        const ok = await syncToCloud();
+        if (!ok) {
+            _lastSyncError = '自动同步失败，请点击"强制推送到云端"手动同步';
+            console.warn('[AutoSync] syncToCloud returned false, _gistSyncing was likely locked');
+            showToast('数据已保存到本地，云端同步失败。请到"数据同步"页面手动推送', 'error');
+        }
         _pendingUserSync = false;
     }, 2000);
 }
@@ -2386,10 +2395,18 @@ function debounceSyncUsers() {
         // ========== Init ==========
         function initCloudSyncUI() {
             const syncNowBtn = document.getElementById('syncNowBtn');
+            const forcePushBtn = document.getElementById('forcePushBtn');
             const syncStatusEl = document.getElementById('syncStatus');
+            const syncDebugEl = document.getElementById('syncDebugInfo');
+
+            function showDebug(msg, isError) {
+                syncDebugEl.style.display = 'block';
+                syncDebugEl.innerHTML = msg;
+                syncDebugEl.style.color = isError ? 'var(--danger)' : 'var(--text-secondary)';
+            }
 
             syncNowBtn.addEventListener('click', async () => {
-                syncStatusEl.textContent = '同步中...';
+                syncStatusEl.textContent = '拉取中...';
                 syncStatusEl.style.color = 'var(--warning)';
                 const ok = await manualSync();
                 if (ok) {
@@ -2402,9 +2419,65 @@ function debounceSyncUsers() {
                     else if (currentPage === 'approval') renderApproval();
                     else if (currentPage === 'personnel') renderPersonnel();
                     updateBadges();
+                    const users = getUsers();
+                    showDebug(`✅ 拉取成功！本地现有 ${users.length} 个用户`, false);
                 } else {
-                    syncStatusEl.textContent = '同步失败';
+                    syncStatusEl.textContent = '拉取失败';
                     syncStatusEl.style.color = 'var(--danger)';
+                    showDebug('❌ 拉取失败，请检查网络或 GitHub Token 是否有效', true);
+                }
+            });
+
+            // Force push local data to cloud
+            forcePushBtn.addEventListener('click', async () => {
+                syncStatusEl.textContent = '推送中...';
+                syncStatusEl.style.color = 'var(--warning)';
+                forcePushBtn.disabled = true;
+
+                try {
+                    const localUsers = JSON.parse(localStorage.getItem('oa_users') || '[]');
+                    showDebug(`本地用户数: ${localUsers.length}，正在推送到云端...`, false);
+
+                    // Step 1: Pull latest from cloud
+                    const cloudUsers = await pullFromGist();
+                    if (cloudUsers === null) {
+                        throw new Error('无法从云端拉取数据（网络问题或Token无效）');
+                    }
+                    showDebug(`本地 ${localUsers.length} 用户，云端 ${cloudUsers.length} 用户，正在合并...`, false);
+
+                    // Step 2: Merge
+                    const merged = mergeUsers(localUsers, cloudUsers, true);
+                    showDebug(`合并后 ${merged.length} 用户，正在写入云端...`, false);
+
+                    // Step 3: Push to cloud
+                    const ok = await pushToGist(merged);
+                    if (!ok) {
+                        throw new Error('推送到云端失败');
+                    }
+
+                    // Step 4: Update local
+                    localStorage.setItem('oa_users', JSON.stringify(merged));
+                    localStorage.setItem('oa_last_sync', Date.now().toString());
+
+                    syncStatusEl.textContent = '推送成功 ✓';
+                    syncStatusEl.style.color = 'var(--success)';
+
+                    const localNames = localUsers.map(u => u.name).join(', ');
+                    const cloudNames = cloudUsers.map(u => u.name).join(', ');
+                    const mergedNames = merged.map(u => u.name).join(', ');
+                    showDebug(`✅ 推送成功！<br>推送前本地: [${localNames}]<br>推送前云端: [${cloudNames}]<br>推送后云端: [${mergedNames}]`, false);
+
+                    // Refresh views
+                    initUsers();
+                    if (currentPage === 'user-manage') renderUserManage();
+                    updateBadges();
+                } catch (e) {
+                    syncStatusEl.textContent = '推送失败';
+                    syncStatusEl.style.color = 'var(--danger)';
+                    showDebug(`❌ 推送失败: ${e.message}<br>请打开浏览器控制台(F12)查看详细错误`, true);
+                    console.error('[ForcePush] Error:', e);
+                } finally {
+                    forcePushBtn.disabled = false;
                 }
             });
         }
@@ -2413,9 +2486,18 @@ function debounceSyncUsers() {
             const statusEl = document.getElementById('syncStatus');
             const lastTimeEl = document.getElementById('syncLastTime');
             const dataInfoEl = document.getElementById('syncDataInfo');
+            const debugEl = document.getElementById('syncDebugInfo');
 
-            statusEl.textContent = '✅ 已连接';
-            statusEl.style.color = 'var(--success)';
+            if (_lastSyncError) {
+                statusEl.textContent = '⚠️ 同步异常';
+                statusEl.style.color = 'var(--danger)';
+                debugEl.style.display = 'block';
+                debugEl.innerHTML = `⚠️ ${_lastSyncError}`;
+                debugEl.style.color = 'var(--danger)';
+            } else {
+                statusEl.textContent = '✅ 已连接';
+                statusEl.style.color = 'var(--success)';
+            }
 
             const lastSync = localStorage.getItem('oa_last_sync');
             lastTimeEl.textContent = lastSync ? '上次同步：' + new Date(parseInt(lastSync)).toLocaleString('zh-CN') : '上次同步：系统启动时自动同步';
@@ -2423,7 +2505,15 @@ function debounceSyncUsers() {
             const users = getUsers();
             const apps = getApplications();
             const personnel = getPersonnel();
-            dataInfoEl.textContent = `数据量：用户 ${users.length} 人，工单 ${apps.length} 条，人员 ${personnel.length} 人`;
+            dataInfoEl.textContent = `本地数据：用户 ${users.length} 人，工单 ${apps.length} 条，人员 ${personnel.length} 人`;
+
+            // Show current local user list for debugging
+            if (debugEl.style.display !== 'block' || !_lastSyncError) {
+                const userNames = users.map(u => u.name).join(', ');
+                debugEl.style.display = 'block';
+                debugEl.innerHTML = `本地用户列表: [${userNames || '无'}]<br><small>提示：如其他设备注册了新用户，请点击"从云端拉取"；如本设备有新用户需推送，请点击"强制推送到云端"</small>`;
+                debugEl.style.color = 'var(--text-secondary)';
+            }
         }
 
 async function init() {
