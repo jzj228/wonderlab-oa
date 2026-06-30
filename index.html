@@ -1488,18 +1488,27 @@ async function pushToGist(cloudData) {
     return false;
 }
 
-// Sync from cloud: pull from Gist, merge with local (cloud wins, local-only preserved)
+// Sync from cloud: pull from Gist, merge bidirectionally with local (no data loss)
 async function syncFromCloud() {
     try {
         const cloudData = await pullFromGist();
         if (cloudData !== null) {
-            _writeLocalCloudData(cloudData);
+            const localData = _readLocalCloudData();
+            // Bidirectional merge: preserve data from both sides
+            const merged = {
+                oa_users: mergeArrayById(localData.oa_users || [], cloudData.oa_users || []),
+                oa_personnel: mergeArrayById(localData.oa_personnel || [], cloudData.oa_personnel || []),
+                oa_applications: mergeArrayById(localData.oa_applications || [], cloudData.oa_applications || []),
+                version: Math.max(localData.version || 0, cloudData.version || 0)
+            };
+            _writeLocalCloudData(merged);
             updateSyncIndicator('success', '已同步');
             return true;
         }
         updateSyncIndicator('error', '同步失败');
         return false;
     } catch (e) {
+        console.warn('[syncFromCloud] error:', e);
         updateSyncIndicator('error', '同步失败');
         return false;
     }
