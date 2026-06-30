@@ -1632,8 +1632,12 @@ async function manualSync() {
         function genOrderNo() { const d=new Date(); return `OA${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(Math.floor(Math.random()*9999)+1).padStart(4,'0')}`; }
         function save(k, v) { 
     localStorage.setItem(k, JSON.stringify(v)); 
-    // 所有共享数据变更时同步到云端（异步，不阻塞）
+    // 同步更新 oa_cloud_data 缓存，确保 _readLocalCloudData() 能读到最新数据
     if (k === 'oa_users' || k === 'oa_personnel' || k === 'oa_applications') {
+        try {
+            const cached = JSON.parse(localStorage.getItem('oa_cloud_data') || 'null');
+            if (cached) { cached[k] = v; localStorage.setItem('oa_cloud_data', JSON.stringify(cached)); }
+        } catch(e) {}
         debounceSyncUsers();
     }
 }
