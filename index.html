@@ -710,18 +710,13 @@
                     <div class="form-group">
                         <label class="form-label">登录方式</label>
                         <select class="form-select" id="loginType">
-                            <option value="phone">手机号登录</option>
-                            <option value="email">邮箱登录</option>
+                            <option value="phone">账号密码登录</option>
                             <option value="feishu">飞书一键登录</option>
                         </select>
                     </div>
                     <div class="form-group" id="loginPhoneGroup">
-                        <label class="form-label">手机号</label>
-                        <input type="tel" class="form-input" id="loginPhone" placeholder="请输入手机号">
-                    </div>
-                    <div class="form-group hidden" id="loginEmailGroup">
-                        <label class="form-label">邮箱</label>
-                        <input type="email" class="form-input" id="loginEmail" placeholder="请输入邮箱">
+                        <label class="form-label">账号</label>
+                        <input type="text" class="form-input" id="loginPhone" placeholder="用户名 / 手机号 / 邮箱">
                     </div>
                     <div class="form-group" id="loginPasswordGroup">
                         <label class="form-label">密码</label>
@@ -738,9 +733,10 @@
                     
                     <div class="demo-account">
                         <strong>演示账号：</strong><br>
-                        管理员：18520170312 / 123456<br>
-                        审批人：13800000002 / 123456<br>
-                        普通用户：13800000003 / 123456
+                        管理员：admin / 123456<br>
+                        审批人：approver / 123456<br>
+                        普通用户：user / 123456<br>
+                        <small style="color:#999">也可用手机号/邮箱登录</small>
                     </div>
                 </div>
 
@@ -1286,14 +1282,14 @@
             // Ensure admin account with real phone exists
             const adminPhone = '18520170312';
             if (!users.find(u => u.phone === adminPhone)) {
-                users.unshift({ id: 'admin', name: '江子俊', phone: adminPhone, email: 'admin@wonderlab.com', password: '123456', role: 'admin', feishu: { bound: true, name: '江子俊', avatar: null }, createdAt: Date.now() });
+                users.unshift({ id: 'admin', name: '江子俊', username: 'admin', phone: adminPhone, email: 'admin@wonderlab.com', password: '123456', role: 'admin', feishu: { bound: true, name: '江子俊', avatar: null }, createdAt: Date.now() });
                 save(KEYS.users, users);
             }
             // Init demo users if empty
             if (users.length <= 1) {
                 const demos = [
-                    { id: 'approver', name: '审批人', phone: '13800000002', email: 'approver@wonderlab.com', password: '123456', role: 'approver', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() },
-                    { id: 'user', name: '普通用户', phone: '13800000003', email: 'user@wonderlab.com', password: '123456', role: 'user', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() }
+                    { id: 'approver', name: '审批人', username: 'approver', phone: '13800000002', email: 'approver@wonderlab.com', password: '123456', role: 'approver', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() },
+                    { id: 'user', name: '普通用户', username: 'user', phone: '13800000003', email: 'user@wonderlab.com', password: '123456', role: 'user', feishu: { bound: false, name: null, avatar: null }, createdAt: Date.now() }
                 ];
                 users.push(...demos);
                 save(KEYS.users, users);
@@ -1301,7 +1297,7 @@
         }
 
         function getUsers() { return load(KEYS.users) || []; }
-        function findUser(identifier) { const users = getUsers(); return users.find(u => u.phone === identifier || u.email === identifier); }
+        function findUser(identifier) { const users = getUsers(); return users.find(u => u.phone === identifier || u.email === identifier || u.username === identifier); }
         function registerUser(data) {
             const users = getUsers();
             if (users.find(u => u.phone === data.phone)) return { success: false, msg: '手机号已注册' };
@@ -1374,8 +1370,7 @@
 
             document.getElementById('loginType').addEventListener('change', (e) => {
                 const type = e.target.value;
-                document.getElementById('loginPhoneGroup').classList.toggle('hidden', type !== 'phone');
-                document.getElementById('loginEmailGroup').classList.toggle('hidden', type !== 'email');
+                document.getElementById('loginPhoneGroup').classList.toggle('hidden', type === 'feishu');
                 document.getElementById('loginPasswordGroup').classList.toggle('hidden', type === 'feishu');
             });
 
@@ -1392,7 +1387,7 @@
                     if (result.success) { showApp(); }
                     else { showToast(result.msg, 'error'); }
                 } else {
-                    const identifier = type === 'phone' ? document.getElementById('loginPhone').value : document.getElementById('loginEmail').value;
+                    const identifier = document.getElementById('loginPhone').value.trim();
                     const password = document.getElementById('loginPassword').value;
                     if (!identifier) { showToast('请输入账号', 'error'); return; }
                     if (!password) { showToast('请输入密码', 'error'); return; }
