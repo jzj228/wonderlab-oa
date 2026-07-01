@@ -1954,6 +1954,13 @@ function debounceSyncUsers() {
         function initUsers() {
             let users = load(KEYS.users) || [];
             let changed = false;
+            // Clean up dirty records: remove users with neither name nor phone
+            const validUsers = users.filter(u => (u.name && u.name.trim()) || (u.phone && u.phone.trim()));
+            if (validUsers.length !== users.length) {
+                console.log('[initUsers] Cleaned ' + (users.length - validUsers.length) + ' dirty records');
+                users = validUsers;
+                changed = true;
+            }
             // Ensure admin account with real phone exists
             const adminPhone = '18520170312';
             if (!users.find(u => u.phone === adminPhone)) {
