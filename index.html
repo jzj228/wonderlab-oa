@@ -1651,6 +1651,30 @@ async function processSyncQueue() {
 
 // ========== 飞书数据同步函数 ==========
 
+// 更新顶部同步状态指示器
+function updateSyncIndicator(status, text) {
+    const icon = document.getElementById('syncIcon');
+    const label = document.getElementById('syncLabel');
+    if (!icon || !label) return;
+    if (status === 'success') {
+        icon.textContent = '✅';
+        label.textContent = text || '已同步';
+        label.style.color = 'var(--success)';
+    } else if (status === 'error') {
+        icon.textContent = '❌';
+        label.textContent = text || '同步失败';
+        label.style.color = 'var(--danger)';
+    } else if (status === 'syncing') {
+        icon.textContent = '🔄';
+        label.textContent = text || '同步中...';
+        label.style.color = 'var(--warning)';
+    } else {
+        icon.textContent = '☁️';
+        label.textContent = text || '未同步';
+        label.style.color = 'var(--gray)';
+    }
+}
+
 // 从飞书拉取所有数据
 async function pullFromFeishu() {
     try {
