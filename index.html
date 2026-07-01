@@ -1708,14 +1708,22 @@ async function syncTable(endpoint, localItems, cloudItems, toFieldsFn) {
         if (item._record_id && cloudMap[item._record_id]) {
             // 已存在的记录，更新
             const resp = await feishuWorkerAPI('PUT', '/' + endpoint + '/' + item._record_id, { fields });
-            if (resp.record_id) {
-                item._record_id = resp.record_id;
+            const newRid = resp?.data?.record?.record_id || resp?.record_id;
+            if (newRid) {
+                item._record_id = newRid;
+            }
+            if (resp?.code !== 0) {
+                console.warn('[syncTable] PUT failed:', endpoint, resp?.msg, resp);
             }
         } else {
             // 新记录，创建
             const resp = await feishuWorkerAPI('POST', '/' + endpoint, { fields });
-            if (resp.record_id) {
-                item._record_id = resp.record_id;
+            const newRid = resp?.data?.record?.record_id || resp?.record_id;
+            if (newRid) {
+                item._record_id = newRid;
+            }
+            if (resp?.code !== 0) {
+                console.warn('[syncTable] POST failed:', endpoint, resp?.msg, resp);
             }
         }
     }
@@ -1781,6 +1789,10 @@ async function cloudPush() {
         const ok = await pushToFeishu(localData);
         console.log('[cloudPush] pushToFeishu result:', ok, 'detail:', _lastSyncDetail);
         _writeLocalCloudData(localData);
+        // 同步完成后，把带 _record_id 的最新数据写回 oa_users 等独立 key
+        localStorage.setItem('oa_users', JSON.stringify(localData.oa_users || []));
+        localStorage.setItem('oa_personnel', JSON.stringify(localData.oa_personnel || []));
+        localStorage.setItem('oa_applications', JSON.stringify(localData.oa_applications || []));
         if (ok) {
             updateSyncIndicator('success', '已同步');
         } else {
