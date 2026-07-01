@@ -1357,7 +1357,7 @@ function feishuRecordToUser(record) {
             avatar: null
         },
         status: 'active',
-        createdAt: fields['注册时间'] ? new Date(fields['注册时间']).getTime() : Date.now()
+        createdAt: fields['注册时间'] ? (typeof fields['注册时间'] === 'number' ? fields['注册时间'] : new Date(fields['注册时间']).getTime()) : Date.now()
     };
 }
 
@@ -1370,7 +1370,7 @@ function userToFeishuFields(user) {
         '角色': _codeToFeishuRole(user.role || 'user'),
         '飞书绑定状态': (user.feishu && user.feishu.bound) ? '已绑定' : '未绑定',
         '飞书名称': user.feishu && user.feishu.name ? user.feishu.name : '',
-        '注册时间': user.createdAt ? new Date(user.createdAt).toISOString() : new Date().toISOString()
+        '注册时间': user.createdAt ? new Date(user.createdAt).getTime() : Date.now()
     };
 }
 
@@ -1389,16 +1389,16 @@ function feishuRecordToPersonnel(record) {
         group: fields['工作组'] || '',
         type: _feishuPersonTypeToCode(fields['人员类型'] || '内部'),
         supervisor: fields['上级主管'] || '',
-        entryDate: fields['入职日期'] ? new Date(fields['入职日期']).toISOString().split('T')[0] : '',
-        leaveDate: fields['离职日期'] ? new Date(fields['离职日期']).toISOString().split('T')[0] : null,
+        entryDate: fields['入职日期'] ? (typeof fields['入职日期'] === 'number' ? new Date(fields['入职日期']).toISOString().split('T')[0] : (fields['入职日期'] || '').toString().split(' ')[0]) : '',
+        leaveDate: fields['离职日期'] ? (typeof fields['离职日期'] === 'number' ? new Date(fields['离职日期']).toISOString().split('T')[0] : (fields['离职日期'] || '').toString().split(' ')[0] || null) : null,
         status: _feishuStatusToCode(fields['状态'] || '在职'),
-        accounts: _parseExtData(fields['扩展数据'] || '{}').accounts || {
+        accounts: {
             banniu: { status: _feishuAccountStatusToCode(fields['班牛账号'] || '待开通') },
             wangdian: { status: _feishuAccountStatusToCode(fields['旺店通账号'] || '待开通') },
             shop: { status: _feishuAccountStatusToCode(fields['店铺账号'] || '待开通') },
             yuyi: { status: _feishuAccountStatusToCode(fields['语忆账号'] || '待开通') }
         },
-        nickname: _parseExtData(fields['扩展数据'] || '{}').nickname || '',
+        nickname: '',
         createdAt: record.created_time ? new Date(record.created_time).getTime() : Date.now(),
         updatedAt: record.last_modified_time ? new Date(record.last_modified_time).getTime() : Date.now()
     };
@@ -1406,10 +1406,6 @@ function feishuRecordToPersonnel(record) {
 
 // 人员对象转飞书字段
 function personnelToFeishuFields(person) {
-    const extData = {
-        nickname: person.nickname || '',
-        accounts: person.accounts || {}
-    };
     return {
         '姓名': person.name || '',
         '手机号': person.phone || '',
@@ -1419,14 +1415,13 @@ function personnelToFeishuFields(person) {
         '工作组': person.group || '',
         '人员类型': _codeToFeishuPersonType(person.type || 'internal'),
         '上级主管': person.supervisor || '',
-        '入职日期': person.entryDate || null,
-        '离职日期': person.leaveDate || null,
+        '入职日期': person.entryDate ? new Date(person.entryDate).getTime() : null,
+        '离职日期': person.leaveDate ? new Date(person.leaveDate).getTime() : null,
         '状态': _codeToFeishuStatus(person.status || 'active'),
         '班牛账号': _codeToFeishuAccountStatus(person.accounts?.banniu?.status || 'pending'),
         '旺店通账号': _codeToFeishuAccountStatus(person.accounts?.wangdian?.status || 'pending'),
         '店铺账号': _codeToFeishuAccountStatus(person.accounts?.shop?.status || 'pending'),
-        '语忆账号': _codeToFeishuAccountStatus(person.accounts?.yuyi?.status || 'pending'),
-        '扩展数据': JSON.stringify(extData)
+        '语忆账号': _codeToFeishuAccountStatus(person.accounts?.yuyi?.status || 'pending')
     };
 }
 
@@ -1440,11 +1435,11 @@ function feishuRecordToApplication(record) {
         orderNo: fields['工单号'] || '',
         type: _feishuApplyTypeToCode(fields['申请类型'] || '开通'),
         applicant: {
-            id: extData.applicantId || '',
+            id: '',
             name: fields['申请人姓名'] || ''
         },
         targetPerson: {
-            name: extData.targetPersonName || fields['目标人员姓名'] || '',
+            name: fields['目标人员姓名'] || '',
             position: fields['目标岗位'] || '',
             channel: fields['目标渠道'] || ''
         },
@@ -1475,10 +1470,6 @@ function applicationToFeishuFields(app) {
     const lastApproval = app.approvalHistory && app.approvalHistory.length > 0 
         ? app.approvalHistory[app.approvalHistory.length - 1] 
         : { approver: '', comment: '' };
-    const extData = {
-        applicantId: app.applicant?.id || '',
-        targetPersonName: app.targetPerson?.name || ''
-    };
     return {
         '工单号': app.orderNo || '',
         '申请类型': _codeToFeishuApplyType(app.type || 'open'),
@@ -1496,8 +1487,7 @@ function applicationToFeishuFields(app) {
         '审批意见': lastApproval.comment || '',
         '提交时间': app.timeline?.submitted || '',
         '审批时间': app.timeline?.approved || '',
-        '执行时间': app.timeline?.executed || '',
-        '扩展数据': JSON.stringify(extData)
+        '执行时间': app.timeline?.executed || ''
     };
 }
 
