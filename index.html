@@ -734,8 +734,8 @@
                     <div class="demo-account">
                         <strong>演示账号：</strong><br>
                         管理员：admin / 123456<br>
-                        审批人：approver / 123456<br>
-                        普通用户：user / 123456<br>
+                        业务主管：supervisor / 123456<br>
+                        普通成员：user / 123456<br>
                         <small style="color:#999">也可用手机号/邮箱登录</small>
                     </div>
                 </div>
@@ -772,8 +772,8 @@
                     <div class="form-group">
                         <label class="form-label">角色</label>
                         <select class="form-select" id="registerRole">
-                            <option value="user">普通用户</option>
-                            <option value="approver">审批人</option>
+                            <option value="user">普通成员</option>
+                            <option value="supervisor">业务主管</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -1090,8 +1090,8 @@
                         <select class="form-select" id="userManageRoleFilter" style="width:140px;">
                             <option value="">全部角色</option>
                             <option value="admin">管理员</option>
-                            <option value="approver">审批人</option>
-                            <option value="user">普通用户</option>
+                            <option value="supervisor">业务主管</option>
+                            <option value="user">普通成员</option>
                         </select>
                         <select class="form-select" id="userManageFeishuFilter" style="width:140px;">
                             <option value="">全部飞书状态</option>
@@ -1122,7 +1122,7 @@
 
             <!-- Cloud Sync Page (Simplified - Feishu Bitable) -->
             <div class="page" id="page-cloud-sync">
-                <div class="page-header"><h1 class="page-title">☁️ 数据同步</h1><p class="page-desc">GitHub Gist 云端存储，多设备自动同步</p></div>
+                <div class="page-header"><h1 class="page-title">☁️ 数据同步</h1><p class="page-desc">飞书多维表格 云端存储，多设备自动同步</p></div>
                 <div class="page-body">
                     <div style="max-width:600px;">
                         <div style="background:var(--white);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:20px;">
@@ -1143,8 +1143,8 @@
 
                         <div style="background:var(--success-bg);border-radius:var(--radius);padding:16px;border-left:4px solid var(--success);margin-bottom:20px;">
                             <p style="font-size:13px;color:#1a6b1a;line-height:1.6;">
-                                <strong>✅ GitHub Gist 云端存储已配置</strong><br>
-                                数据存储在 GitHub Gist 中，所有设备打开网页即可自动同步最新数据。
+                                <strong>✅ 飞书多维表格 云端存储已配置</strong><br>
+                                数据存储在飞书多维表格中，所有设备打开网页即可自动同步最新数据。
                             </p>
                         </div>
 
@@ -1173,7 +1173,7 @@
             <div class="modal-body">
                 <input type="hidden" id="editUserId">
                 <div class="form-group"><label class="form-label">姓名</label><input type="text" class="form-input" id="editUserName" readonly style="background:#f5f5f5;"></div>
-                <div class="form-group"><label class="form-label">角色</label><select class="form-select" id="editUserRole"><option value="user">普通用户</option><option value="approver">审批人</option><option value="admin">管理员</option></select></div>
+                <div class="form-group"><label class="form-label">角色</label><select class="form-select" id="editUserRole"><option value="user">普通成员</option><option value="supervisor">业务主管</option><option value="admin">管理员</option></select></div>
                 <div class="form-group"><label class="form-label">状态</label><select class="form-select" id="editUserStatus"><option value="active">启用</option><option value="disabled">禁用</option></select></div>
                 <div class="form-group"><label class="form-label">飞书绑定</label><div id="editUserFeishuInfo" style="padding:8px 0;font-size:14px;color:#666;">未绑定</div><button class="btn btn-default" id="unbindFeishuBtn" style="display:none;margin-top:4px;font-size:12px;padding:4px 12px;">解除飞书绑定</button></div>
                 <div class="form-group"><label class="form-label">密码管理</label><button class="btn btn-default" id="resetUserPasswordBtn" style="margin-top:4px;font-size:12px;padding:4px 12px;">重置密码</button></div>
@@ -1217,7 +1217,7 @@
                 <div class="form-group"><label class="form-label">姓名 <span class="required">*</span></label><input type="text" class="form-input" id="addUserName" placeholder="请输入姓名"></div>
                 <div class="form-group"><label class="form-label">手机号 <span class="required">*</span></label><input type="tel" class="form-input" id="addUserPhone" placeholder="请输入手机号"></div>
                 <div class="form-group"><label class="form-label">邮箱</label><input type="email" class="form-input" id="addUserEmail" placeholder="请输入邮箱"></div>
-                <div class="form-group"><label class="form-label">角色</label><select class="form-select" id="addUserRole"><option value="user">普通用户</option><option value="approver">审批人</option><option value="admin">管理员</option></select></div>
+                <div class="form-group"><label class="form-label">角色</label><select class="form-select" id="addUserRole"><option value="user">普通成员</option><option value="supervisor">业务主管</option><option value="admin">管理员</option></select></div>
                 <div class="form-group"><label class="form-label">初始密码 <span class="required">*</span></label><input type="text" class="form-input" id="addUserPassword" placeholder="请设置初始密码" value="123456"></div>
             </div>
             <div class="modal-footer"><button class="btn btn-default" id="cancelAddUserBtn">取消</button><button class="btn btn-primary" id="confirmAddUserBtn">创建用户</button></div>
@@ -1288,18 +1288,29 @@
             observer.observe(gate, { attributes: true, attributeFilter: ['class'] });
         })();
 
-        // ========== GitHub Gist Cloud Sync (Improved) ==========
+        // ========== 飞书多维表格 Worker 云端同步 ==========
 
-const GIST_CONFIG = {
-    gistId: '39f757ff5cbaad763b53de029a508235',
-    fileName: 'oa-data.json'
+const WORKER_CONFIG = {
+    baseUrl: 'https://feishu-oa-proxy.wonderlab-oa.workers.dev',
+    authSecret: 'wonderlab-oa-2026'
 };
 
-function getGistToken() {
-    const _e = [77,67,94,66,95,72,117,90,75,94,117,27,27,104,24,108,111,123,101,115,26,122,112,97,122,105,18,96,28,121,65,27,64,117,65,18,18,29,101,29,71,127,72,18,31,77,78,76,98,71,65,77,94,19,123,99,28,110,123,66,82,125,71,19,76,99,114,71,93,120,78,64,104,83,27,24,66,103,110,100,98,110,104,100,99,28,95,125,31,98,111,114,19];
-    const key = 42;
-    return _e.map(c => String.fromCharCode(c ^ key)).join('');
-
+// Worker API 调用封装
+async function feishuWorkerAPI(method, endpoint, body = null) {
+    const url = WORKER_CONFIG.baseUrl + endpoint;
+    const opts = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + WORKER_CONFIG.authSecret
+        }
+    };
+    if (body && ['POST', 'PUT'].includes(method)) {
+        opts.body = JSON.stringify(body);
+    }
+    const resp = await fetch(url, opts);
+    return await resp.json();
+}
 
 // ========== 同步错误日志 ==========
 let _syncErrorLog = [];
@@ -1326,13 +1337,251 @@ function _getSyncErrorLog() {
 // 启动时加载已有日志
 _getSyncErrorLog();
 
+// ========== 飞书数据转换函数 ==========
+
+// 飞书记录转用户对象
+function feishuRecordToUser(record) {
+    const fields = record.fields || {};
+    return {
+        _record_id: record.record_id,
+        id: record.record_id, // 使用 record_id 作为 id
+        phone: fields['手机号'] || '',
+        password: fields['密码'] || '123456',
+        name: fields['昵称'] || '',
+        username: fields['昵称'] || '', // 兼容旧字段
+        email: fields['邮箱'] || '',
+        role: _feishuRoleToCode(fields['角色'] || '普通成员'),
+        feishu: {
+            bound: fields['飞书绑定状态'] === '已绑定',
+            name: fields['飞书名称'] || null,
+            avatar: null
+        },
+        status: 'active',
+        createdAt: fields['注册时间'] ? new Date(fields['注册时间']).getTime() : Date.now()
+    };
 }
 
-let _gistSyncing = false;
+// 用户对象转飞书字段
+function userToFeishuFields(user) {
+    return {
+        '手机号': user.phone || '',
+        '密码': user.password || '123456',
+        '昵称': user.name || '',
+        '角色': _codeToFeishuRole(user.role || 'user'),
+        '飞书绑定状态': (user.feishu && user.feishu.bound) ? '已绑定' : '未绑定',
+        '飞书名称': user.feishu && user.feishu.name ? user.feishu.name : '',
+        '注册时间': user.createdAt ? new Date(user.createdAt).toISOString() : new Date().toISOString()
+    };
+}
+
+// 飞书记录转人员对象
+function feishuRecordToPersonnel(record) {
+    const fields = record.fields || {};
+    return {
+        _record_id: record.record_id,
+        id: record.record_id,
+        name: fields['姓名'] || '',
+        phone: fields['手机号'] || '',
+        email: fields['邮箱'] || '',
+        position: fields['岗位'] || '',
+        channel: fields['目标渠道'] || '', // 飞书表中实际存储的是"目标渠道"字段
+        team: fields['团队'] || '万益蓝',
+        group: fields['工作组'] || '',
+        type: _feishuPersonTypeToCode(fields['人员类型'] || '内部'),
+        supervisor: fields['上级主管'] || '',
+        entryDate: fields['入职日期'] ? new Date(fields['入职日期']).toISOString().split('T')[0] : '',
+        leaveDate: fields['离职日期'] ? new Date(fields['离职日期']).toISOString().split('T')[0] : null,
+        status: _feishuStatusToCode(fields['状态'] || '在职'),
+        accounts: _parseExtData(fields['扩展数据'] || '{}').accounts || {
+            banniu: { status: _feishuAccountStatusToCode(fields['班牛账号'] || '待开通') },
+            wangdian: { status: _feishuAccountStatusToCode(fields['旺店通账号'] || '待开通') },
+            shop: { status: _feishuAccountStatusToCode(fields['店铺账号'] || '待开通') },
+            yuyi: { status: _feishuAccountStatusToCode(fields['语忆账号'] || '待开通') }
+        },
+        nickname: _parseExtData(fields['扩展数据'] || '{}').nickname || '',
+        createdAt: record.created_time ? new Date(record.created_time).getTime() : Date.now(),
+        updatedAt: record.last_modified_time ? new Date(record.last_modified_time).getTime() : Date.now()
+    };
+}
+
+// 人员对象转飞书字段
+function personnelToFeishuFields(person) {
+    const extData = {
+        nickname: person.nickname || '',
+        accounts: person.accounts || {}
+    };
+    return {
+        '姓名': person.name || '',
+        '手机号': person.phone || '',
+        '邮箱': person.email || '',
+        '岗位': person.position || '',
+        '团队': person.team || '万益蓝',
+        '工作组': person.group || '',
+        '人员类型': _codeToFeishuPersonType(person.type || 'internal'),
+        '上级主管': person.supervisor || '',
+        '入职日期': person.entryDate || null,
+        '离职日期': person.leaveDate || null,
+        '状态': _codeToFeishuStatus(person.status || 'active'),
+        '班牛账号': _codeToFeishuAccountStatus(person.accounts?.banniu?.status || 'pending'),
+        '旺店通账号': _codeToFeishuAccountStatus(person.accounts?.wangdian?.status || 'pending'),
+        '店铺账号': _codeToFeishuAccountStatus(person.accounts?.shop?.status || 'pending'),
+        '语忆账号': _codeToFeishuAccountStatus(person.accounts?.yuyi?.status || 'pending'),
+        '扩展数据': JSON.stringify(extData)
+    };
+}
+
+// 飞书记录转申请对象
+function feishuRecordToApplication(record) {
+    const fields = record.fields || {};
+    const extData = _parseExtData(fields['扩展数据'] || '{}');
+    return {
+        _record_id: record.record_id,
+        id: record.record_id,
+        orderNo: fields['工单号'] || '',
+        type: _feishuApplyTypeToCode(fields['申请类型'] || '开通'),
+        applicant: {
+            id: extData.applicantId || '',
+            name: fields['申请人姓名'] || ''
+        },
+        targetPerson: {
+            name: extData.targetPersonName || fields['目标人员姓名'] || '',
+            position: fields['目标岗位'] || '',
+            channel: fields['目标渠道'] || ''
+        },
+        accounts: {
+            banniu: { action: _feishuActionToCode(fields['班牛操作'] || '不变') },
+            wangdian: { action: _feishuActionToCode(fields['旺店通操作'] || '不变') },
+            shop: { action: _feishuActionToCode(fields['店铺操作'] || '不变') },
+            yuyi: { action: _feishuActionToCode(fields['语忆操作'] || '不变') }
+        },
+        reason: fields['申请原因'] || '',
+        status: _feishuApprovalStatusToCode(fields['审批状态'] || '待审批'),
+        approvalHistory: [{
+            approver: fields['审批人'] || '',
+            comment: fields['审批意见'] || '',
+            time: fields['审批时间'] || ''
+        }],
+        timeline: {
+            submitted: fields['提交时间'] || '',
+            approved: fields['审批时间'] || '',
+            executed: fields['执行时间'] || ''
+        },
+        createdAt: record.created_time ? new Date(record.created_time).getTime() : Date.now()
+    };
+}
+
+// 申请对象转飞书字段
+function applicationToFeishuFields(app) {
+    const lastApproval = app.approvalHistory && app.approvalHistory.length > 0 
+        ? app.approvalHistory[app.approvalHistory.length - 1] 
+        : { approver: '', comment: '' };
+    const extData = {
+        applicantId: app.applicant?.id || '',
+        targetPersonName: app.targetPerson?.name || ''
+    };
+    return {
+        '工单号': app.orderNo || '',
+        '申请类型': _codeToFeishuApplyType(app.type || 'open'),
+        '申请人姓名': app.applicant?.name || '',
+        '目标人员姓名': app.targetPerson?.name || '',
+        '目标岗位': app.targetPerson?.position || '',
+        '目标渠道': app.targetPerson?.channel || '',
+        '申请原因': app.reason || '',
+        '班牛操作': _codeToFeishuAction(app.accounts?.banniu?.action || 'no'),
+        '旺店通操作': _codeToFeishuAction(app.accounts?.wangdian?.action || 'no'),
+        '店铺操作': _codeToFeishuAction(app.accounts?.shop?.action || 'no'),
+        '语忆操作': _codeToFeishuAction(app.accounts?.yuyi?.action || 'no'),
+        '审批状态': _codeToFeishuApprovalStatus(app.status || 'pending'),
+        '审批人': lastApproval.approver || '',
+        '审批意见': lastApproval.comment || '',
+        '提交时间': app.timeline?.submitted || '',
+        '审批时间': app.timeline?.approved || '',
+        '执行时间': app.timeline?.executed || '',
+        '扩展数据': JSON.stringify(extData)
+    };
+}
+
+// 辅助转换函数
+function _parseExtData(jsonStr) {
+    try {
+        return JSON.parse(jsonStr) || {};
+    } catch(e) {
+        return {};
+    }
+}
+
+// 角色转换
+function _feishuRoleToCode(feishuRole) {
+    const map = { '管理员': 'admin', '业务主管': 'supervisor', '普通成员': 'user' };
+    return map[feishuRole] || 'user';
+}
+function _codeToFeishuRole(code) {
+    const map = { 'admin': '管理员', 'supervisor': '业务主管', 'user': '普通成员' };
+    return map[code] || '普通成员';
+}
+
+// 人员类型转换
+function _feishuPersonTypeToCode(type) {
+    return type === '内部' ? 'internal' : 'external';
+}
+function _codeToFeishuPersonType(code) {
+    return code === 'internal' ? '内部' : '外部';
+}
+
+// 状态转换
+function _feishuStatusToCode(status) {
+    return status === '在职' ? 'active' : 'inactive';
+}
+function _codeToFeishuStatus(code) {
+    return code === 'active' ? '在职' : '离职';
+}
+
+// 账号状态转换
+function _feishuAccountStatusToCode(status) {
+    const map = { '已开通': 'opened', '待开通': 'pending', '不需要': 'not_needed' };
+    return map[status] || 'pending';
+}
+function _codeToFeishuAccountStatus(code) {
+    const map = { 'opened': '已开通', 'pending': '待开通', 'not_needed': '不需要', 'closed': '已关闭' };
+    return map[code] || '待开通';
+}
+
+// 申请类型转换
+function _feishuApplyTypeToCode(type) {
+    const map = { '开通': 'open', '关闭': 'close', '变更': 'change' };
+    return map[type] || 'open';
+}
+function _codeToFeishuApplyType(code) {
+    const map = { 'open': '开通', 'close': '关闭', 'change': '变更' };
+    return map[code] || '开通';
+}
+
+// 操作类型转换
+function _feishuActionToCode(action) {
+    const map = { '开通': 'open', '关闭': 'close', '不变': 'no' };
+    return map[action] || 'no';
+}
+function _codeToFeishuAction(code) {
+    const map = { 'open': '开通', 'close': '关闭', 'no': '不变' };
+    return map[code] || '不变';
+}
+
+// 审批状态转换
+function _feishuApprovalStatusToCode(status) {
+    const map = { '待审批': 'pending', '已通过': 'approved', '已驳回': 'rejected', '已完成': 'completed' };
+    return map[status] || 'pending';
+}
+function _codeToFeishuApprovalStatus(code) {
+    const map = { 'pending': '待审批', 'approved': '已通过', 'rejected': '已驳回', 'completed': '已完成' };
+    return map[code] || '待审批';
+}
+
+// ========== 同步变量 ==========
+let _feishuSyncing = false;
 let _lastSyncTime = 0;
-let _lastSyncDetail = ''; // 详细同步状态（用于诊断）
-let _syncQueue = []; // 同步请求排队队列（解决锁冲突问题）
-let _syncQueueProcessing = false; // 队列处理中
+let _lastSyncDetail = '';
+let _syncQueue = [];
+let _syncQueueProcessing = false;
 
 // ========== 云端优先存储核心函数 ==========
 // 读取本地缓存
@@ -1361,7 +1610,7 @@ function mergeArrayById(localArr, cloudArr) {
     return Array.from(map.values());
 }
 
-// ========== 原有的 Mutex-based sync ==========
+// ========== Mutex-based sync ==========
 
 // Mutex-based sync: if a sync is in progress, queue and wait; never fail due to lock
 async function runSync(fn, name) {
@@ -1375,31 +1624,23 @@ async function runSync(fn, name) {
                 resolve(false);
             }
         };
-        if (!_gistSyncing && !_syncQueueProcessing) {
-            // No lock, execute immediately
-            execute();
+        if (!_feishuSyncing && !_syncQueueProcessing) {
+            _feishuSyncing = true;
+            execute().finally(() => { _feishuSyncing = false; });
         } else {
-            // Lock held, queue it
             console.log('[SyncQueue] ' + name + ' queued (lock held by another sync)');
             _syncQueue.push(execute);
-            // Start processing if not already
             if (!_syncQueueProcessing) {
                 _syncQueueProcessing = true;
                 processSyncQueue();
             }
-            // Also resolve when our turn comes
-            const originalExecute = execute;
-            _syncQueue[_syncQueue.length - 1] = async () => {
-                await originalExecute();
-            };
         }
     });
 }
 
 async function processSyncQueue() {
     while (_syncQueue.length > 0) {
-        // Wait for lock to be released
-        while (_gistSyncing) {
+        while (_feishuSyncing) {
             await new Promise(r => setTimeout(r, 500));
         }
         const next = _syncQueue.shift();
@@ -1408,90 +1649,82 @@ async function processSyncQueue() {
     _syncQueueProcessing = false;
 }
 
-// Pull latest data from Gist (with retry) - returns full data object
-async function pullFromGist() {
-    const token = getGistToken();
-    for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-            const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
-                headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-            });
-            if (!resp.ok) { 
-                const errText = await resp.text().catch(()=>'');
-                _lastSyncDetail = 'Pull失败(第' + attempt + '次): HTTP ' + resp.status;
-                if (attempt < 2) { await new Promise(r => setTimeout(r, 1500)); continue; }
-                return null; 
-            }
-            const data = await resp.json();
-            const file = data.files[GIST_CONFIG.fileName];
-            if (!file) { _lastSyncDetail = 'Pull失败: 文件中未找到oa-data.json'; return null; }
-            const parsed = JSON.parse(file.content);
-            // 兼容旧格式（可能没有 oa_personnel 和 oa_applications）
-            const result = {
-                oa_users: parsed.oa_users || [],
-                oa_personnel: parsed.oa_personnel || [],
-                oa_applications: parsed.oa_applications || []
-            };
-            _lastSyncTime = Date.now();
-            _lastSyncDetail = 'Pull成功: 用户' + result.oa_users.length + ' 人员' + result.oa_personnel.length + ' 申请' + result.oa_applications.length;
-            console.log('[Gist] Pulled all data');
-            return result;
-        } catch (e) {
-            _lastSyncDetail = 'Pull异常(第' + attempt + '次): ' + e.message;
-            if (attempt < 2) { await new Promise(r => setTimeout(r, 1500)); continue; }
-            return null;
-        }
+// ========== 飞书数据同步函数 ==========
+
+// 从飞书拉取所有数据
+async function pullFromFeishu() {
+    try {
+        const [usersResp, personnelResp, applicationsResp] = await Promise.all([
+            feishuWorkerAPI('GET', '/users'),
+            feishuWorkerAPI('GET', '/personnel'),
+            feishuWorkerAPI('GET', '/applications')
+        ]);
+        
+        const users = (usersResp.records || []).map(r => feishuRecordToUser(r));
+        const personnel = (personnelResp.records || []).map(r => feishuRecordToPersonnel(r));
+        const applications = (applicationsResp.records || []).map(r => feishuRecordToApplication(r));
+        
+        _lastSyncTime = Date.now();
+        _lastSyncDetail = 'Pull成功: 用户' + users.length + ' 人员' + personnel.length + ' 申请' + applications.length;
+        console.log('[Feishu] Pulled all data');
+        return { oa_users: users, oa_personnel: personnel, oa_applications: applications };
+    } catch (e) {
+        _lastSyncDetail = 'Pull异常: ' + e.message;
+        _logSyncError('pullFromFeishu', '异常: ' + e.message);
+        return null;
     }
-    return null;
 }
 
-// Push data to Gist (with retry) - receives full data object
-async function pushToGist(cloudData) {
-    const token = getGistToken();
-    cloudData.version = Date.now();
-    const payload = JSON.stringify(cloudData, null, 2);
-    for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-            _lastSyncDetail = 'Push中(' + attempt + '/2)';
-            const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': 'token ' + token,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    files: { [GIST_CONFIG.fileName]: { content: payload } }
-                })
-            });
-            if (!resp.ok) { 
-                const errBody = await resp.text().catch(()=>'N/A');
-                _lastSyncDetail = 'Push失败(第' + attempt + '次): HTTP ' + resp.status;
-                _logSyncError('pushToGist', 'HTTP ' + resp.status, 'token=' + token.substring(0,15) + '... body=' + errBody.substring(0,200));
-                if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
-                return false; 
-            }
-            _lastSyncTime = Date.now();
-            _lastSyncDetail = 'Push成功';
-            console.log('[Gist] Pushed all data');
-            return true;
-        } catch (e) {
-            _lastSyncDetail = 'Push异常(第' + attempt + '次): ' + e.message;
-            _logSyncError('pushToGist', '异常: ' + e.message, 'name=' + e.name + ' stack=' + (e.stack||'').substring(0,200));
-            if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
-            return false;
-        }
+// 推送数据到飞书（逐条更新/创建）
+async function pushToFeishu(localData) {
+    try {
+        // 获取云端数据
+        const cloudData = await pullFromFeishu();
+        if (!cloudData) return false;
+        
+        // 对每个表进行 diff 并推送
+        await syncTable('users', localData.oa_users, cloudData.oa_users, userToFeishuFields);
+        await syncTable('personnel', localData.oa_personnel, cloudData.oa_personnel, personnelToFeishuFields);
+        await syncTable('applications', localData.oa_applications, cloudData.oa_applications, applicationToFeishuFields);
+        
+        _lastSyncTime = Date.now();
+        _lastSyncDetail = 'Push成功';
+        console.log('[Feishu] Pushed all data');
+        return true;
+    } catch (e) {
+        _lastSyncDetail = 'Push异常: ' + e.message;
+        _logSyncError('pushToFeishu', '异常: ' + e.message);
+        return false;
     }
-    // 所有重试耗尽
-    _lastSyncDetail = 'Push失败: 所有重试耗尽';
-    console.error('[pushToGist] All retries exhausted');
-    return false;
 }
 
-// Sync from cloud: pull from Gist, merge bidirectionally with local (no data loss)
+// 通用表同步：对比本地和云端，新增/更新记录
+async function syncTable(endpoint, localItems, cloudItems, toFieldsFn) {
+    const cloudMap = {};
+    (cloudItems || []).forEach(item => { if (item._record_id) cloudMap[item._record_id] = item; });
+    
+    for (const item of (localItems || [])) {
+        const fields = toFieldsFn(item);
+        if (item._record_id && cloudMap[item._record_id]) {
+            // 已存在的记录，更新
+            const resp = await feishuWorkerAPI('PUT', '/' + endpoint + '/' + item._record_id, { fields });
+            if (resp.record_id) {
+                item._record_id = resp.record_id;
+            }
+        } else {
+            // 新记录，创建
+            const resp = await feishuWorkerAPI('POST', '/' + endpoint, { fields });
+            if (resp.record_id) {
+                item._record_id = resp.record_id;
+            }
+        }
+    }
+}
+
+// Sync from cloud: pull from Feishu, merge bidirectionally with local (no data loss)
 async function syncFromCloud() {
     try {
-        const cloudData = await pullFromGist();
+        const cloudData = await pullFromFeishu();
         if (cloudData !== null) {
             const localData = _readLocalCloudData();
             // Bidirectional merge: preserve data from both sides
@@ -1515,9 +1748,6 @@ async function syncFromCloud() {
 }
 
 // Bidirectional merge: combine local and cloud users without data loss
-// Strategy: union of both sides; for conflicts (same user edited on both sides),
-// the "localVersion" wins. Users only in one side are preserved.
-// NEVER removes users — deletion is not safe without a tombstone mechanism.
 function mergeUsers(localUsers, cloudUsers, localWins) {
     const merged = [...cloudUsers];
     const cloudMap = {};
@@ -1525,38 +1755,31 @@ function mergeUsers(localUsers, cloudUsers, localWins) {
 
     localUsers.forEach(u => {
         if (cloudMap[u.id]) {
-            // User exists in both — replace cloud version with local if localWins
             if (localWins) {
                 const idx = merged.findIndex(cu => cu.id === u.id);
                 if (idx >= 0) merged[idx] = u;
             }
         } else {
-            // User only in local — add to merged
             merged.push(u);
         }
     });
 
-    // Users only in cloud are already in merged (from the initial copy)
     return merged;
 }
 
 // Cloud push: merge local and cloud data, then push back
 async function cloudPush() {
-    // No lock needed — GitHub Gist writes replace the entire file, concurrent-safe
     try {
         const localData = _readLocalCloudData();
-        // Merge: pull latest from cloud, then overlay local changes (local wins for conflicts, cloud-only entries preserved)
-        const cloudData = await pullFromGist();
+        const cloudData = await pullFromFeishu();
         if (cloudData !== null) {
-            // Merge each data type: union of both sides
             localData.oa_users = mergeArrayById(localData.oa_users, cloudData.oa_users);
             localData.oa_personnel = mergeArrayById(localData.oa_personnel, cloudData.oa_personnel);
             localData.oa_applications = mergeArrayById(localData.oa_applications, cloudData.oa_applications);
         }
-        console.log('[cloudPush] Calling pushToGist...');
-        const ok = await pushToGist(localData);
-        console.log('[cloudPush] pushToGist result:', ok, 'detail:', _lastSyncDetail);
-        // Update local cache with merged data
+        console.log('[cloudPush] Calling pushToFeishu...');
+        const ok = await pushToFeishu(localData);
+        console.log('[cloudPush] pushToFeishu result:', ok, 'detail:', _lastSyncDetail);
         _writeLocalCloudData(localData);
         if (ok) {
             updateSyncIndicator('success', '已同步');
@@ -1578,15 +1801,11 @@ async function syncToCloud() {
 }
 
 // Background sync: pull cloud data and merge bidirectionally with local
-// Cloud wins for conflicts (to pick up changes from other devices),
-// but local-only users are always preserved (never overwritten).
 async function backgroundSync() {
-    // Skip if user is actively syncing (avoid redundant pulls during user operations)
     if (_pendingUserSync) { console.log('[backgroundSync] Skipped: user sync pending'); return; }
     try {
-        const cloudData = await pullFromGist();
+        const cloudData = await pullFromFeishu();
         if (cloudData !== null) {
-            // Check if anything changed
             const localData = _readLocalCloudData();
             if (JSON.stringify(cloudData) !== JSON.stringify(localData)) {
                 _writeLocalCloudData(cloudData);
@@ -1595,7 +1814,7 @@ async function backgroundSync() {
             updateSyncIndicator('success', '已同步');
         }
     } catch (e) {
-        console.warn('[Gist] Background sync error:', e);
+        console.warn('[Feishu] Background sync error:', e);
     }
 }
 
@@ -1615,7 +1834,7 @@ let _autoSyncInterval = null;
 function startAutoSync() {
     if (_autoSyncInterval) return;
     _autoSyncInterval = setInterval(backgroundSync, 60000);
-    console.log('[GistSync] Auto sync started (every 60s)');
+    console.log('[FeishuSync] Auto sync started (every 60s)');
 }
 
 async function manualSync() {
@@ -1664,7 +1883,7 @@ function debounceSyncUsers() {
         const ok = await syncToCloud();
         if (!ok) {
             _lastSyncError = '自动同步失败，请点击"强制推送到云端"手动同步';
-            _logSyncError('debounceSync', 'syncToCloud返回false', 'detail=' + (_lastSyncDetail || '无') + ' gistSyncing=' + _gistSyncing);
+            _logSyncError('debounceSync', 'syncToCloud返回false', 'detail=' + (_lastSyncDetail || '无') + ' feishuSyncing=' + _feishuSyncing);
             showToast('数据已保存到本地，云端同步失败: ' + (_lastSyncDetail || '未知错误'), 'error');
         }
         _pendingUserSync = false;
@@ -1889,8 +2108,8 @@ function debounceSyncUsers() {
         function updateUserUI() {
             if (!currentUser) return;
             document.getElementById('sidebarName').textContent = currentUser.name;
-            const roleLabels = { admin: '系统管理员', approver: '审批人', user: '普通用户' };
-            document.getElementById('sidebarRole').textContent = roleLabels[currentUser.role];
+            const roleLabels = { admin: '管理员', supervisor: '业务主管', user: '普通成员' };
+            document.getElementById('sidebarRole').textContent = roleLabels[currentUser.role] || '普通成员';
             const avatarEl = document.getElementById('sidebarAvatar');
             if (currentUser.feishu && currentUser.feishu.bound && currentUser.feishu.avatar) {
                 avatarEl.innerHTML = `<img src="${currentUser.feishu.avatar}" alt="${currentUser.feishu.name}">`;
@@ -1901,7 +2120,7 @@ function debounceSyncUsers() {
             if (currentUser.role === 'admin') {
                 document.querySelectorAll('.admin-nav').forEach(el => el.classList.remove('hidden'));
                 document.querySelectorAll('.approval-nav').forEach(el => el.classList.remove('hidden'));
-            } else if (currentUser.role === 'approver') {
+            } else if (currentUser.role === 'supervisor') {
                 document.querySelectorAll('.approval-nav').forEach(el => el.classList.remove('hidden'));
             }
         }
@@ -2249,8 +2468,8 @@ function debounceSyncUsers() {
                 if (feishuFilter === 'unbound' && u.feishu && u.feishu.bound) return false;
                 return true;
             });
-            const roleLabels = { admin: '管理员', approver: '审批人', user: '普通用户' };
-            const roleColors = { admin: 'tag-opened', approver: 'tag-pending', user: 'tag-gray' };
+            const roleLabels = { admin: '管理员', supervisor: '业务主管', user: '普通成员' };
+            const roleColors = { admin: 'tag-opened', supervisor: 'tag-pending', user: 'tag-gray' };
             document.getElementById('userManageTableBody').innerHTML = filtered.length === 0 ? '<tr><td colspan="8" style="text-align:center;color:#999;padding:40px;">暂无数据</td></tr>' : filtered.map(u => {
                 const feishuBound = u.feishu && u.feishu.bound;
                 const feishuHtml = feishuBound ? `<span class="tag tag-opened">✓ 已绑定</span><br><small style="color:#999">${u.feishu.name||''}</small>` : '<span class="tag tag-gray">未绑定</span>';
@@ -2331,7 +2550,7 @@ function debounceSyncUsers() {
                 document.getElementById('addUserPassword').value = '123456';
                 renderUserManage();
                 showToast(`用户 ${name} 创建成功`, 'success');
-                addNotification('system', '👤 新用户注册', `管理员已创建用户：${name}（${role==='admin'?'管理员':role==='approver'?'审批人':'普通用户'}）`, null);
+                addNotification('system', '👤 新用户注册', `管理员已创建用户：${name}（${role==='admin'?'管理员':role==='supervisor'?'业务主管':'普通成员'}）`, null);
             });
 
             // Edit user modal
@@ -2443,15 +2662,15 @@ function debounceSyncUsers() {
 
         function updateBadges() { const apps = getApplications(); document.getElementById('approvalBadge').textContent = apps.filter(a=>a.status==='pending').length; }
 
-        // Force pull from cloud and render — bypasses _gistSyncing lock
+        // Force pull from cloud and render — bypasses _feishuSyncing lock
         async function forcePullAndRender(targetPage) {
             try {
-                const cloudData = await pullFromGist();
+                const cloudData = await pullFromFeishu();
                 if (cloudData !== null) {
                     _writeLocalCloudData(cloudData);
                 }
             } catch (e) {
-                console.warn('[Gist] forcePull error:', e);
+                console.warn('[Feishu] forcePull error:', e);
             }
             // Always render regardless of sync result
             if (targetPage === 'user-manage') renderUserManage();
@@ -2585,7 +2804,7 @@ function debounceSyncUsers() {
                     showDebug(`本地数据：用户${localData.oa_users.length} 人员${localData.oa_personnel.length} 申请${localData.oa_applications.length}，正在推送...`, false);
 
                     // Push to cloud
-                    const ok = await pushToGist(localData);
+                    const ok = await pushToFeishu(localData);
                     if (!ok) {
                         throw new Error('推送到云端失败');
                     }
@@ -2657,16 +2876,15 @@ function debounceSyncUsers() {
             const debugEl = document.getElementById('syncDebugInfo');
             debugEl.style.display = 'block';
             debugEl.style.color = 'var(--text-secondary)';
-            debugEl.innerHTML = '⏳ 正在诊断同步连接...';
+            debugEl.innerHTML = '⏳ 正在诊断飞书同步连接...';
             
             const results = [];
             
-            // Step 1: Check token decoding
+            // Step 1: Check Worker config
             try {
-                const token = getGistToken();
-                results.push('✅ Token解码成功: ' + token.substring(0,10) + '...');
+                results.push('✅ Worker配置: ' + WORKER_CONFIG.baseUrl);
             } catch(e) {
-                results.push('❌ Token解码失败: ' + e.message);
+                results.push('❌ Worker配置错误: ' + e.message);
                 debugEl.innerHTML = results.join('<br>');
                 return;
             }
@@ -2679,69 +2897,60 @@ function debounceSyncUsers() {
                 results.push('❌ 本地数据读取失败: ' + e.message);
             }
             
-            // Step 3: Test GET (pull)
+            // Step 3: Test health check endpoint
             try {
-                const token = getGistToken();
-                const resp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
-                    headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-                });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const file = data.files[GIST_CONFIG.fileName];
-                    if (file) {
-                        const parsed = JSON.parse(file.content);
-                        results.push('✅ 云端拉取成功: HTTP ' + resp.status);
-                        results.push('   云端数据: 用户' + (parsed.oa_users||[]).length + ' 人员' + (parsed.oa_personnel||[]).length + ' 申请' + (parsed.oa_applications||[]).length);
-                    } else {
-                        results.push('⚠️ 云端数据文件中未找到 oa-data.json');
-                    }
+                const resp = await feishuWorkerAPI('GET', '/health');
+                if (resp && resp.status !== 'error') {
+                    results.push('✅ Worker健康检查成功');
                 } else {
-                    const errText = await resp.text().catch(()=>'N/A');
-                    results.push('❌ 云端拉取失败: HTTP ' + resp.status + ' | ' + errText.substring(0,150));
+                    results.push('⚠️ Worker响应异常: ' + JSON.stringify(resp).substring(0,100));
                 }
             } catch(e) {
-                results.push('❌ 云端拉取异常: ' + e.message + ' (可能是网络问题或CORS被阻止)');
+                results.push('❌ Worker健康检查失败: ' + e.message);
             }
             
-            // Step 4: Test PATCH (push) - read current data, push back unchanged
+            // Step 4: Test GET /users
             try {
-                const token = getGistToken();
-                const getResp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
-                    headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-                });
-                if (!getResp.ok) {
-                    results.push('⚠️ 跳过推送测试(拉取失败)');
+                const resp = await feishuWorkerAPI('GET', '/users');
+                if (resp && resp.records !== undefined) {
+                    results.push('✅ 用户表拉取成功: ' + resp.records.length + ' 条记录');
                 } else {
-                    const data = await getResp.json();
-                    const currentContent = data.files[GIST_CONFIG.fileName].content;
-                    const patchResp = await fetch('https://api.github.com/gists/' + GIST_CONFIG.gistId, {
-                        method: 'PATCH',
-                        headers: {
-                            'Authorization': 'token ' + token,
-                            'Accept': 'application/vnd.github.v3+json',
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            files: { [GIST_CONFIG.fileName]: { content: currentContent } }
-                        })
-                    });
-                    if (patchResp.ok) {
-                        results.push('✅ 云端推送成功: HTTP ' + patchResp.status + ' (写入测试通过)');
-                    } else {
-                        const errText = await patchResp.text().catch(()=>'N/A');
-                        results.push('❌ 云端推送失败: HTTP ' + patchResp.status + ' | ' + errText.substring(0,150));
-                    }
+                    results.push('⚠️ 用户表响应异常: ' + JSON.stringify(resp).substring(0,100));
                 }
             } catch(e) {
-                results.push('❌ 云端推送异常: ' + e.message);
+                results.push('❌ 用户表拉取失败: ' + e.message);
             }
             
-            // Step 5: Check _gistSyncing lock
-            results.push((_gistSyncing ? '⚠️ 同步锁被占用(可能导致自动同步跳过)' : '✅ 同步锁正常(未占用)'));
+            // Step 5: Test GET /personnel
+            try {
+                const resp = await feishuWorkerAPI('GET', '/personnel');
+                if (resp && resp.records !== undefined) {
+                    results.push('✅ 人员表拉取成功: ' + resp.records.length + ' 条记录');
+                } else {
+                    results.push('⚠️ 人员表响应异常: ' + JSON.stringify(resp).substring(0,100));
+                }
+            } catch(e) {
+                results.push('❌ 人员表拉取失败: ' + e.message);
+            }
             
-            // Step 6: Show network info
+            // Step 6: Test GET /applications
+            try {
+                const resp = await feishuWorkerAPI('GET', '/applications');
+                if (resp && resp.records !== undefined) {
+                    results.push('✅ 申请表拉取成功: ' + resp.records.length + ' 条记录');
+                } else {
+                    results.push('⚠️ 申请表响应异常: ' + JSON.stringify(resp).substring(0,100));
+                }
+            } catch(e) {
+                results.push('❌ 申请表拉取失败: ' + e.message);
+            }
+            
+            // Step 7: Check sync lock
+            results.push((_feishuSyncing ? '⚠️ 同步锁被占用(可能导致自动同步跳过)' : '✅ 同步锁正常(未占用)'));
+            
+            // Step 8: Show network info
             results.push('📍 当前页面Origin: ' + window.location.origin);
-            results.push('📍 GitHub API: https://api.github.com');
+            results.push('📍 Worker地址: ' + WORKER_CONFIG.baseUrl);
             
             debugEl.innerHTML = results.join('<br>') + '<br><small style="color:#888;">诊断时间: ' + new Date().toLocaleString('zh-CN') + '</small>';
         }
